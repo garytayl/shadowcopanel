@@ -66,23 +66,23 @@ function connectClient(): Promise<Client> {
 }
 
 /**
- * Run a remote shell command. Uses `bash -lc` so operators can rely on PATH and `cd`.
+ * Run a remote shell command on the remote host.
  *
- * **Multiline:** `JSON.stringify` encodes newlines as `\` + `n`, which `bash -lc` does not
- * interpret as line breaks — that breaks `$(…)` and control flow. For any script containing
- * a real newline, we pipe `base64 -d` into `bash` instead.
+ * **Why base64 + stdin:** sshd typically runs `bash -c '<one string>'`. If that string is
+ * `bash -lc "…$(find …)…"`, the **outer** `bash -c` performs command substitution on `$(…)`
+ * before the inner `bash -lc` runs — wrong shell, broken `find` syntax, `(` errors. Newlines
+ * inside JSON strings also become literal `\\n`, not line breaks.
+ *
+ * So we never embed arbitrary scripts in the outer `-c` argument: decode with base64 and
+ * pipe into `bash -l` (login env, same intent as `-lc`).
  */
 export async function sshExec(command: string): Promise<ExecResult> {
   const client = await connectClient();
   const normalized = command.replace(/\r\n/g, "\n");
-  const wrapped =
-    normalized.includes("\n") && normalized.trim().length > 0
-      ? (() => {
-          const b64 = Buffer.from(normalized, "utf8").toString("base64");
-          // Base64 alphabet has no single quotes; safe inside '…' for bash -lc.
-          return `bash -lc ${JSON.stringify(`echo '${b64}' | base64 -d | bash`)}`;
-        })()
-      : `bash -lc ${JSON.stringify(normalized)}`;
+  const b64 = Buffer.from(normalized, "utf8").toString("base64");
+  // Base64 alphabet has no single quotes — safe inside '…' for the outer bash -lc.
+  const inner = `echo '${b64}' | base64 -d | bash -l`;
+  const wrapped = `bash -lc ${JSON.stringify(inner)}`;
 
   try {
     return await new Promise<ExecResult>((resolve, reject) => {
