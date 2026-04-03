@@ -230,10 +230,12 @@ export async function getRecentLogs(lines = 400): Promise<string> {
     return r.stdout;
   }
 
-  // Single-line script so it also works if the SSH layer passes the command as one `-lc` arg
-  // without newline decoding (see sshExec multiline handling).
+  // Discovery: game install dir (REFORGER_SERVER_PATH) plus Linux/XDG logs under
+  // ~/.config/ArmaReforger/logs (timestamped folders with console.log, error.log, …).
   const root = shSingleQuote(serverPath);
-  const script = `set -euo pipefail; ROOT=${root}; L=$(find "$ROOT" -maxdepth 5 -type f \\( -name "*.log" -o -name "console.log" \\) 2>/dev/null | while read -r f; do printf '%s\\t%s\\n' "$(stat -c %Y "$f" 2>/dev/null || echo 0)" "$f"; done | sort -n | tail -1 | cut -f2- || true); if [ -z "$L" ]; then echo "(no log files found — discovery only looks for *.log or console.log under $ROOT (max depth 5). If your server writes elsewhere, set REFORGER_LOG_GLOB in .env.local to the full path, e.g. /home/ubuntu/arma-reforger/logs/console.log)"; else tail -n ${lines} "$L"; fi`;
+  const sshUser = env.REFORGER_SSH_USER || "ubuntu";
+  const configLogs = shSingleQuote(`/home/${sshUser}/.config/ArmaReforger/logs`);
+  const script = `set -euo pipefail; ROOT=${root}; CFG=${configLogs}; L=$(find "$ROOT" "$CFG" -maxdepth 10 -type f -name '*.log' 2>/dev/null | while read -r f; do printf '%s\\t%s\\n' "$(stat -c %Y "$f" 2>/dev/null || echo 0)" "$f"; done | sort -n | tail -1 | cut -f2- || true); if [ -z "$L" ]; then echo "(no *.log files found under $ROOT or $CFG — set REFORGER_LOG_GLOB in .env.local to a file path, e.g. $CFG/logs_*/console.log)"; else tail -n ${lines} "$L"; fi`;
 
   const r = await sshExec(script);
   return r.stdout || r.stderr;
