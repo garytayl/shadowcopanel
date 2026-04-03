@@ -63,7 +63,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConnectivitySection } from "@/components/dashboard/connectivity-section";
-import { ActivityLatestStrip } from "@/components/dashboard/activity-latest-strip";
+import { ServerActivitySection } from "@/components/dashboard/server-activity-section";
 import { HealthScoreCard } from "@/components/dashboard/health-score-card";
 import { LogAnalysisCard } from "@/components/panel/log-analysis-card";
 import { ModStackValidationPanel } from "@/components/panel/mod-stack-validation-panel";
@@ -74,6 +74,7 @@ import {
 } from "@/components/dashboard/latency-sparkline";
 import { PowerOrb, type PowerOrbPhase } from "@/components/dashboard/power-orb";
 import { parseDfRootLine, parseFreeMemM, parseLoad1m } from "@/lib/utils/dashboard-metrics";
+import { RUNTIME_FAST_POLL_STATES } from "@/lib/reforger/runtime-state";
 import { cn } from "@/lib/utils";
 
 const AUTO_REFRESH_KEY = "reforger-dashboard-auto-refresh";
@@ -98,6 +99,7 @@ function safeDashboardExport(snap: DashboardSnapshot) {
     logAnalysis: snap.logAnalysis,
     healthScore: snap.healthScore,
     cpuCores: snap.cpuCores,
+    serverActivity: snap.serverActivity,
   };
 }
 
@@ -268,6 +270,14 @@ export function DashboardClient() {
     return () => window.clearInterval(id);
   }, [autoRefresh, refresh]);
 
+  /** Faster polling while the classifier thinks the server is still converging (startup). */
+  useEffect(() => {
+    const rs = snap?.serverActivity?.state?.state;
+    if (!rs || !autoRefresh || !RUNTIME_FAST_POLL_STATES.has(rs)) return;
+    const id = window.setInterval(() => void refresh(), 5000);
+    return () => window.clearInterval(id);
+  }, [snap?.serverActivity?.state?.state, autoRefresh, refresh]);
+
   async function runSafeRestartAction() {
     setActionKey("safe-restart");
     try {
@@ -399,6 +409,16 @@ export function DashboardClient() {
 
   const publicMatch =
     publicAddr && s?.host ? hostsEffectivelyMatch(publicAddr, s.host) : null;
+
+  const checkPort = s?.checkPort ?? 2001;
+  const gamePortBound = useMemo(() => {
+    const p = snap?.portChecks?.find((c) => c.port === checkPort && c.protocol === "udp");
+    return p?.status === "listening";
+  }, [snap?.portChecks, checkPort]);
+  const a2sPortBound = useMemo(() => {
+    const p = snap?.portChecks?.find((c) => c.port === 17777 && c.protocol === "udp");
+    return p?.status === "listening";
+  }, [snap?.portChecks]);
 
   const mem = useMemo(
     () => (snap?.health?.free ? parseFreeMemM(snap.health.free) : null),
@@ -552,7 +572,16 @@ export function DashboardClient() {
         variant="dashboard"
       />
 
-      <ActivityLatestStrip refreshTick={refreshTick} />
+      <ServerActivitySection
+        serverActivity={snap?.serverActivity}
+        checkPort={checkPort}
+        loading={loading}
+        refreshTick={refreshTick}
+        processRunning={st?.processRunning ?? false}
+        tmuxActive={st?.tmuxSessionExists ?? false}
+        gamePortBound={gamePortBound ?? false}
+        a2sPortBound={a2sPortBound ?? false}
+      />
 
       {modStackValidation && modStackValidation.issues.length > 0 ? (
         <div className="space-y-2">

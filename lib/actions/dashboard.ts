@@ -15,6 +15,10 @@ import {
   type HealthScoreResult,
 } from "@/lib/reforger/health-score";
 import { analyzeReforgerLogs } from "@/lib/reforger/log-analysis";
+import { extractRuntimeEvents } from "@/lib/reforger/runtime-events";
+import type { RuntimeEvent } from "@/lib/reforger/runtime-events";
+import { deriveRuntimeState } from "@/lib/reforger/runtime-state";
+import type { RuntimeStateResult } from "@/lib/reforger/runtime-state";
 import {
   getCpuCoreCount,
   getHealthSnapshot,
@@ -30,6 +34,11 @@ import type { LogAnalysisResult } from "@/lib/reforger/log-analysis";
 import { parseDfRootLine, parseFreeMemM } from "@/lib/utils/dashboard-metrics";
 import { err, ok, type ApiResult } from "@/lib/types/api";
 import type { PortCheck } from "@/lib/types/connectivity";
+
+export type ServerActivitySnapshot = {
+  state: RuntimeStateResult;
+  events: RuntimeEvent[];
+};
 
 export type DashboardSnapshot = {
   settings: ReturnType<typeof getPublicServerSettings>;
@@ -47,6 +56,8 @@ export type DashboardSnapshot = {
   cpuCores: number;
   /** Combined health score for dashboard hero. */
   healthScore: HealthScoreResult;
+  /** Humanized “what is the server doing” + high-signal events (not raw logs). */
+  serverActivity: ServerActivitySnapshot;
 };
 
 export async function fetchDashboardSnapshot(): Promise<
@@ -66,9 +77,10 @@ export async function fetchDashboardSnapshot(): Promise<
     ]);
 
     let logAnalysis: LogAnalysisResult | null = null;
+    let logTail = "";
     try {
-      const tail = await getRecentLogs(400);
-      logAnalysis = analyzeReforgerLogs(tail);
+      logTail = await getRecentLogs(400);
+      logAnalysis = analyzeReforgerLogs(logTail);
     } catch {
       logAnalysis = null;
     }
@@ -95,6 +107,27 @@ export async function fetchDashboardSnapshot(): Promise<
       diskUsedPercent: disk?.usedPct,
       cpuCores,
     });
+
+    const serverActivity: ServerActivitySnapshot = {
+      state: deriveRuntimeState({
+        sshReachable: status.sshReachable,
+        configured: settings.configured,
+        processRunning: status.processRunning,
+        tmuxActive: status.tmuxSessionExists,
+        gamePortBound,
+        a2sPortBound,
+        checkPort: settings.checkPort,
+        logTail: logTail || null,
+        logAnalysis,
+      }),
+      events: extractRuntimeEvents(logTail || null, logAnalysis, {
+        processRunning: status.processRunning,
+        tmuxActive: status.tmuxSessionExists,
+        gamePortBound,
+        a2sPortBound,
+        checkPort: settings.checkPort,
+      }),
+    };
 
     if (logAnalysis) {
       const criticalIssues = logAnalysis.issues.filter((i) => i.severity === "critical");
@@ -127,6 +160,7 @@ export async function fetchDashboardSnapshot(): Promise<
       logAnalysis,
       cpuCores,
       healthScore,
+      serverActivity,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
