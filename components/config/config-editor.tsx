@@ -12,7 +12,9 @@ import {
   saveRawConfigAction,
   saveRemoteConfigAction,
 } from "@/lib/actions/config";
+import { Hint } from "@/components/dashboard/hint";
 import { ConfigAnomalyBanner } from "@/components/panel/config-anomaly-banner";
+import { LabelWithHint, TitleWithHint } from "@/components/panel/label-with-hint";
 import { downloadTextFile } from "@/lib/utils/download";
 import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
 import type { ConfigNormalizationIssue } from "@/lib/reforger/types";
@@ -32,7 +34,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -40,18 +41,20 @@ import { Textarea } from "@/components/ui/textarea";
 
 function NumberInput({
   label,
+  hint,
   value,
   onChange,
   id,
 }: {
   label: string;
+  hint: string;
   id: string;
   value: number;
   onChange: (n: number) => void;
 }) {
   return (
     <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
+      <LabelWithHint htmlFor={id} label={label} hint={hint} />
       <Input
         id={id}
         type="number"
@@ -173,18 +176,25 @@ export function ConfigEditor() {
     <div className="space-y-6">
       <ConfigAnomalyBanner issues={anomalies} />
       <Alert className="rounded-2xl border-amber-500/40 bg-amber-500/5">
-        <AlertTitle>Passwords &amp; privacy</AlertTitle>
+        <AlertTitle className="flex items-center gap-2">
+          Passwords &amp; privacy
+          <Hint
+            label="Values you save here are written to the remote config.json over SSH. They are not encrypted in that file unless you use host-level tooling—treat this page like a secrets form."
+            size="md"
+          />
+        </AlertTitle>
         <AlertDescription>
           Server passwords you type here are saved to your cloud machine when you click Save. Don’t share
           screenshots of this page publicly. Only people you trust should have access to this website.
         </AlertDescription>
       </Alert>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button onClick={() => void load()} disabled={loading || saving}>
           {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Download className="mr-2 size-4" />}
           Load current file from server
         </Button>
+        <Hint label="Re-reads config.json from the host and refreshes the form, raw editor, and anomaly banner." />
         <Button
           type="button"
           variant="secondary"
@@ -194,10 +204,12 @@ export function ConfigEditor() {
           {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Wrench className="mr-2 size-4" />}
           Repair / normalize config
         </Button>
+        <Hint label="Fetches the file, runs the same normalization as saves (merge legacy top-level mods, dedupe), validates, then writes—creates a .bak when a prior file exists." />
         <Button type="button" variant="outline" onClick={() => void downloadExport()} disabled={saving}>
           {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <FileDown className="mr-2 size-4" />}
           Download a backup copy
         </Button>
+        <Hint label="Downloads the current normalized JSON to your computer—handy before risky edits." />
       </div>
 
       <Tabs defaultValue="form" className="w-full">
@@ -210,14 +222,22 @@ export function ConfigEditor() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <Card className="rounded-2xl border-border/80">
               <CardHeader>
-                <CardTitle className="text-base">Server &amp; network</CardTitle>
+                <CardTitle className="text-base">
+                  <TitleWithHint hint="These map to top-level network fields and game.* in config.json. Saving always re-reads the remote file first, then merges—other keys in the file are preserved.">
+                    Server &amp; network
+                  </TitleWithHint>
+                </CardTitle>
                 <CardDescription>
                   Common options in plain language—other advanced fields stay in the file when you save
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="serverName">Server name</Label>
+                  <LabelWithHint
+                    htmlFor="serverName"
+                    label="Server name"
+                    hint="Displayed in the server browser and in-game as game.name."
+                  />
                   <Input
                     id="serverName"
                     value={form.serverName}
@@ -225,7 +245,11 @@ export function ConfigEditor() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                  <LabelWithHint
+                    htmlFor="password"
+                    label="Password"
+                    hint="Password players type to join; stored as game.password on the server file."
+                  />
                   <Input
                     id="password"
                     type="password"
@@ -235,7 +259,11 @@ export function ConfigEditor() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="admin">Admin password</Label>
+                  <LabelWithHint
+                    htmlFor="admin"
+                    label="Admin password"
+                    hint="Administrator / RCON-style access; game.passwordAdmin. Keep it secret."
+                  />
                   <Input
                     id="admin"
                     type="password"
@@ -245,7 +273,11 @@ export function ConfigEditor() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="bindAddress">Bind address</Label>
+                  <LabelWithHint
+                    htmlFor="bindAddress"
+                    label="Bind address"
+                    hint="IP the dedicated server listens on. 0.0.0.0 = all network interfaces on the machine."
+                  />
                   <Input
                     id="bindAddress"
                     value={form.bindAddress}
@@ -255,11 +287,16 @@ export function ConfigEditor() {
                 <NumberInput
                   id="bindPort"
                   label="Bind port"
+                  hint="Primary game UDP port (bindPort). Open this UDP port in your cloud security group and match REFORGER_CHECK_PORT on the panel when possible."
                   value={form.bindPort}
                   onChange={(n) => setForm((f) => ({ ...f, bindPort: n }))}
                 />
                 <div className="space-y-2">
-                  <Label htmlFor="pubAddr">Public address</Label>
+                  <LabelWithHint
+                    htmlFor="pubAddr"
+                    label="Public address"
+                    hint="Hostname or IP you advertise to players (publicAddress). Should match your instance’s public DNS/IP for joinability checks."
+                  />
                   <Input
                     id="pubAddr"
                     value={form.publicAddress}
@@ -269,11 +306,16 @@ export function ConfigEditor() {
                 <NumberInput
                   id="pubPort"
                   label="Public port"
+                  hint="Port shown to clients (publicPort). Often same as bind port; differs if you use port forwarding."
                   value={form.publicPort}
                   onChange={(n) => setForm((f) => ({ ...f, publicPort: n }))}
                 />
                 <div className="space-y-2">
-                  <Label htmlFor="a2sAddr">A2S address</Label>
+                  <LabelWithHint
+                    htmlFor="a2sAddr"
+                    label="A2S address"
+                    hint="Steam server-browser query bind address (a2s.address). Often 0.0.0.0 on the game host."
+                  />
                   <Input
                     id="a2sAddr"
                     value={form.a2sAddress}
@@ -283,19 +325,24 @@ export function ConfigEditor() {
                 <NumberInput
                   id="a2sPort"
                   label="A2S port"
+                  hint="UDP port for A2S queries (server list / Steam tools). Must be reachable if you rely on browser listing."
                   value={form.a2sPort}
                   onChange={(n) => setForm((f) => ({ ...f, a2sPort: n }))}
                 />
                 <NumberInput
                   id="maxPl"
                   label="Max players"
+                  hint="Upper bound for concurrent players (game.maxPlayers)."
                   value={form.maxPlayers}
                   onChange={(n) => setForm((f) => ({ ...f, maxPlayers: n }))}
                 />
                 <div className="flex items-center justify-between rounded-xl border border-border/80 p-4 md:col-span-2">
-                  <div>
-                    <p className="text-sm font-medium">Visible in server browser</p>
-                    <p className="text-xs text-muted-foreground">game.visible</p>
+                  <div className="flex items-start gap-2">
+                    <div>
+                      <p className="text-sm font-medium">Visible in server browser</p>
+                      <p className="text-xs text-muted-foreground">game.visible</p>
+                    </div>
+                    <Hint label="If off, the session may not appear in public listings (behavior depends on Reforger version)." />
                   </div>
                   <Switch
                     checked={form.visible}
@@ -303,9 +350,12 @@ export function ConfigEditor() {
                   />
                 </div>
                 <div className="flex items-center justify-between rounded-xl border border-border/80 p-4 md:col-span-2">
-                  <div>
-                    <p className="text-sm font-medium">Cross-platform</p>
-                    <p className="text-xs text-muted-foreground">game.crossPlatform</p>
+                  <div className="flex items-start gap-2">
+                    <div>
+                      <p className="text-sm font-medium">Cross-platform</p>
+                      <p className="text-xs text-muted-foreground">game.crossPlatform</p>
+                    </div>
+                    <Hint label="Allows console and PC players together when the build supports it." />
                   </div>
                   <Switch
                     checked={form.crossPlatform}
@@ -315,12 +365,14 @@ export function ConfigEditor() {
                 <NumberInput
                   id="smvd"
                   label="Server max view distance"
+                  hint="game.gameProperties.serverMaxViewDistance — server-side simulation range cap (meters)."
                   value={form.serverMaxViewDistance}
                   onChange={(n) => setForm((f) => ({ ...f, serverMaxViewDistance: n }))}
                 />
                 <NumberInput
                   id="nvd"
                   label="Network view distance"
+                  hint="game.gameProperties.networkViewDistance — how far the server streams entities to clients."
                   value={form.networkViewDistance}
                   onChange={(n) => setForm((f) => ({ ...f, networkViewDistance: n }))}
                 />
@@ -329,14 +381,22 @@ export function ConfigEditor() {
 
             <Card className="mt-6 rounded-2xl border-border/80">
               <CardHeader>
-                <CardTitle className="text-base">Server identity</CardTitle>
+                <CardTitle className="text-base">
+                  <TitleWithHint hint="Optional Bohemia backend fields. Leave blank if you don’t use cloud matchmaking features that require them.">
+                    Server identity
+                  </TitleWithHint>
+                </CardTitle>
                 <CardDescription>
                   Optional backend fields (see Bohemia server config wiki). Leave blank to keep defaults.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="dedicatedServerId">Dedicated server ID</Label>
+                  <LabelWithHint
+                    htmlFor="dedicatedServerId"
+                    label="Dedicated server ID"
+                    hint="Stable ID for backend services (dedicatedServerId). Only needed for certain hosting integrations."
+                  />
                   <Input
                     id="dedicatedServerId"
                     placeholder="e.g. ar-gm-myserver"
@@ -345,7 +405,11 @@ export function ConfigEditor() {
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="region">Region</Label>
+                  <LabelWithHint
+                    htmlFor="region"
+                    label="Region"
+                    hint="Region code (e.g. US, EU) for backend routing when required by your provider."
+                  />
                   <Input
                     id="region"
                     placeholder="US, EU, AS, AU, SA, AF"
@@ -358,9 +422,11 @@ export function ConfigEditor() {
 
             <Card className="mt-6 rounded-2xl border-border/80">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
+                <CardTitle className="flex flex-wrap items-center gap-2 text-base">
                   <Images className="size-4 text-primary" aria-hidden />
-                  Presentation &amp; images
+                  <TitleWithHint hint="Mission header drives how your session appears in UI. Image fields are Enfusion .edds resource paths, not HTTP URLs.">
+                    Presentation &amp; images
+                  </TitleWithHint>
                 </CardTitle>
                 <CardDescription>
                   Written to <code className="text-xs">game.gameProperties.missionHeader</code>. Text
@@ -371,7 +437,11 @@ export function ConfigEditor() {
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="mname">Mission display name</Label>
+                  <LabelWithHint
+                    htmlFor="mname"
+                    label="Mission display name"
+                    hint="missionHeader.m_sName — title shown in server browser / loading UI."
+                  />
                   <Input
                     id="mname"
                     placeholder="m_sName"
@@ -380,7 +450,7 @@ export function ConfigEditor() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="mauth">Mission author</Label>
+                  <LabelWithHint htmlFor="mauth" label="Mission author" hint="missionHeader.m_sAuthor." />
                   <Input
                     id="mauth"
                     placeholder="m_sAuthor"
@@ -389,7 +459,11 @@ export function ConfigEditor() {
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="mdesc">Short description</Label>
+                  <LabelWithHint
+                    htmlFor="mdesc"
+                    label="Short description"
+                    hint="missionHeader.m_sDescription — one-line blurb."
+                  />
                   <Input
                     id="mdesc"
                     placeholder="m_sDescription"
@@ -398,7 +472,11 @@ export function ConfigEditor() {
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="mdet">Rules / long details</Label>
+                  <LabelWithHint
+                    htmlFor="mdet"
+                    label="Rules / long details"
+                    hint="missionHeader.m_sDetails — longer rules or HTML-like text per Bohemia docs."
+                  />
                   <Textarea
                     id="mdet"
                     placeholder="m_sDetails"
@@ -409,7 +487,11 @@ export function ConfigEditor() {
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="micon">Icon (resource name)</Label>
+                  <LabelWithHint
+                    htmlFor="micon"
+                    label="Icon (resource name)"
+                    hint="missionHeader.m_sIcon — Enfusion resource path to an .edds icon, often starting with {GUID}."
+                  />
                   <Input
                     id="micon"
                     className="font-mono text-xs"
@@ -419,7 +501,11 @@ export function ConfigEditor() {
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="mload">Loading screen (resource name)</Label>
+                  <LabelWithHint
+                    htmlFor="mload"
+                    label="Loading screen (resource name)"
+                    hint="missionHeader.m_sLoadingScreen — full-screen loading texture resource."
+                  />
                   <Input
                     id="mload"
                     className="font-mono text-xs"
@@ -429,7 +515,11 @@ export function ConfigEditor() {
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="mprev">Preview image (resource name)</Label>
+                  <LabelWithHint
+                    htmlFor="mprev"
+                    label="Preview image (resource name)"
+                    hint="missionHeader.m_sPreviewImage — preview still for the session."
+                  />
                   <Input
                     id="mprev"
                     className="font-mono text-xs"
@@ -452,7 +542,11 @@ export function ConfigEditor() {
         <TabsContent value="raw" className="mt-4">
           <Card className="rounded-2xl border-border/80">
             <CardHeader>
-              <CardTitle className="text-base">Raw JSON</CardTitle>
+              <CardTitle className="text-base">
+                <TitleWithHint hint="Direct edit of the remote file. On save, JSON is parsed, normalized (e.g. workshop mods moved to game.mods), validated, then written. A timestamped .bak copy is made when a file already exists.">
+                  Raw JSON
+                </TitleWithHint>
+              </CardTitle>
               <CardDescription>For advanced users—broken JSON will be rejected to protect your server</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

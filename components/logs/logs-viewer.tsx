@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Download, Filter, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
+import { Hint } from "@/components/dashboard/hint";
 import { fetchLogsAction, type LogHealthSummary } from "@/lib/actions/logs";
 import { downloadTextFile } from "@/lib/utils/download";
 import { Badge } from "@/components/ui/badge";
@@ -79,7 +80,7 @@ export function LogsViewer() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             onClick={() => void refresh()}
             disabled={loading}
@@ -90,6 +91,7 @@ export function LogsViewer() {
             {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
             Refresh logs
           </Button>
+          <Hint label="Fetches a fresh tail from the server over SSH (see Settings for REFORGER_LOG_GLOB or auto-discovery)." />
           <Button
             type="button"
             variant="secondary"
@@ -107,7 +109,7 @@ export function LogsViewer() {
             Download view
           </Button>
         </div>
-        <div className="relative min-w-0 flex-1 sm:min-w-[200px] sm:max-w-md">
+        <div className="relative flex min-w-0 flex-1 items-center gap-1.5 sm:min-w-[200px] sm:max-w-md">
           <Input
             placeholder="Search in output…"
             value={query}
@@ -116,6 +118,7 @@ export function LogsViewer() {
             autoComplete="off"
             enterKeyHint="search"
           />
+          <Hint label="Client-side filter on the text already loaded—does not run a new SSH command." />
         </div>
       </div>
 
@@ -123,7 +126,10 @@ export function LogsViewer() {
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
           <Card className="rounded-2xl border-border/80">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Quick health hints</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base">
+                Quick health hints
+                <Hint label="Heuristic counts and phrases parsed from the log tail—use for triage, not as ground truth." />
+              </CardTitle>
               <CardDescription>Automatic guesses from the text on screen—not a substitute for reading the log</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
@@ -141,9 +147,10 @@ export function LogsViewer() {
 
       <Card className="rounded-2xl border-border/80">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
+          <CardTitle className="flex flex-wrap items-center gap-2 text-base">
             <Filter className="size-4" />
             Quick filters
+            <Hint label="OR logic: with filters on, a line shows if it matches any active filter. Combine with the search box for AND-style narrowing." />
           </CardTitle>
           <CardDescription>
             Tap a keyword to show only lines that match. Use several at once. Clear to see everything again.
@@ -176,7 +183,10 @@ export function LogsViewer() {
 
       <Card className="rounded-2xl border-border/80">
         <CardHeader>
-          <CardTitle className="text-base">Log text</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base">
+            Log text
+            <Hint label="Download exports the filtered view (search + quick filters), not necessarily the full remote file." />
+          </CardTitle>
           <CardDescription>
             Reads the newest log file we can find on your server (or a fixed path if your host set one)
           </CardDescription>

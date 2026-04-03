@@ -24,7 +24,9 @@ import {
   saveModsAction,
   type ModRowPayload,
 } from "@/lib/actions/mods";
+import { Hint } from "@/components/dashboard/hint";
 import { ConfigAnomalyBanner } from "@/components/panel/config-anomaly-banner";
+import { TitleWithHint } from "@/components/panel/label-with-hint";
 import { downloadTextFile } from "@/lib/utils/download";
 import type { ConfigNormalizationIssue } from "@/lib/reforger/types";
 import type { WorkshopCatalogMod, WorkshopSearchResult, WorkshopSort } from "@/lib/workshop/types";
@@ -50,7 +52,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MarketplaceCatalogSkeleton } from "@/components/marketplace/marketplace-catalog-skeleton";
 import { ModDetailDialog } from "@/components/marketplace/mod-detail-dialog";
-import { Hint } from "@/components/dashboard/hint";
 import { MarketplaceStack } from "@/components/marketplace/marketplace-stack";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -420,7 +421,10 @@ export function MarketplaceClient() {
           <section className="rounded-2xl border border-border/70 bg-gradient-to-b from-card/90 to-card/40 p-4 shadow-sm ring-1 ring-white/[0.04] md:p-5">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
               <div>
-                <h2 className="text-base font-semibold tracking-tight">Search catalog</h2>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="text-base font-semibold tracking-tight">Search catalog</h2>
+                  <Hint label="Results come from the official Reforger Workshop site via this app’s server (not your browser). Rate limits and HTML changes on Bohemia’s side can affect search." />
+                </div>
                 <p className="text-[11px] text-muted-foreground">Press <kbd className="rounded border border-border/80 bg-muted/50 px-1 font-mono text-[10px]">/</kbd> to focus</p>
               </div>
               <Hint label="Search is executed on this app’s server; your browser does not call the workshop API directly." />
@@ -808,7 +812,11 @@ export function MarketplaceClient() {
         >
           <Card className="rounded-2xl border-primary/15 bg-card/80 shadow-sm ring-1 ring-primary/10">
             <CardHeader className="space-y-1 pb-3">
-              <CardTitle className="text-base">Server stack</CardTitle>
+              <CardTitle className="text-base">
+                <TitleWithHint hint="Ordered list written to game.mods on Save—identical data to the Mods page. Drag to reorder; Restore reloads from the server file.">
+                  Server stack
+                </TitleWithHint>
+              </CardTitle>
               <CardDescription className="text-xs leading-relaxed">
                 Load order for <code className="text-[10px]">config.json</code> · same list as{" "}
                 <Link className="font-medium text-primary underline underline-offset-2" href="/mods">

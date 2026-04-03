@@ -286,10 +286,14 @@ export function DashboardClient() {
               ) : (
                 <Badge variant="secondary">Offline</Badge>
               )}
+              <Hint label="Control link means this app can open an SSH session to your instance. Offline = SSH failed (network, key, or security group). This is not the same as players being able to join." />
               {st?.serverLikelyUp ? (
                 <Badge variant="outline" className="border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
                   Process
                 </Badge>
+              ) : null}
+              {st?.serverLikelyUp ? (
+                <Hint label="Process = we saw a likely Reforger/Enfusion process and your tmux session. If this disagrees with reality, check Diagnostics." />
               ) : null}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -298,11 +302,12 @@ export function DashboardClient() {
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-2 lg:justify-end">
-            <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-2 py-1.5">
+            <div className="flex items-center gap-1.5 rounded-xl border border-border/60 bg-muted/20 px-2 py-1.5">
               <Switch id="auto-refresh" checked={autoRefresh} onCheckedChange={setAutoRefresh} size="sm" />
               <Label htmlFor="auto-refresh" className="text-[11px] font-normal">
                 30s
               </Label>
+              <Hint label="When on, the dashboard re-fetches status every 30 seconds in this browser tab only. It does not change the server." />
             </div>
             <Button
               variant="outline"
@@ -342,6 +347,10 @@ export function DashboardClient() {
         </div>
 
         <div className="mt-6 flex flex-col items-center gap-2 border-t border-border/50 pt-6 md:mt-8 md:pt-8">
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span>Power</span>
+            <Hint label="Running = tmux session + game process detected. Partial = only one of those. Stopped = neither. Click uses the same SSH actions as the buttons below (start / stop / restart by state)." />
+          </div>
           <PowerOrb
             phase={phase}
             disabled={powerOrbDisabled}
@@ -359,7 +368,7 @@ export function DashboardClient() {
         <StatCard
           icon={Activity}
           label="Power"
-          hint="tmux session + game process"
+          hint="Summary: Up = tmux + Reforger process both seen. Down = not both. Uses pgrep + tmux on the remote host."
         >
           {loading && !snap ? (
             "…"
@@ -372,15 +381,27 @@ export function DashboardClient() {
         <StatCard icon={Users} label="Players" hint="Not measured from the panel; game API TBD">
           —
         </StatCard>
-        <StatCard icon={Server} label="Mods" hint="mods in config.json">
+        <StatCard
+          icon={Server}
+          label="Mods"
+          hint="Number of workshop mod entries under game.mods on the remote config (after normalization)."
+        >
           {modCount == null ? "—" : modCount}
         </StatCard>
-        <StatCard icon={Cpu} label="Scenario" hint="game.scenarioId">
+        <StatCard
+          icon={Cpu}
+          label="Scenario"
+          hint="game.scenarioId — which mission/scenario the server loads. Long GUID string from Reforger."
+        >
           <span className="line-clamp-2 break-all font-mono text-xs text-muted-foreground">
             {scenarioId ?? "—"}
           </span>
         </StatCard>
-        <StatCard icon={Timer} label="Uptime" hint="Host uptime">
+        <StatCard
+          icon={Timer}
+          label="Uptime"
+          hint="Linux host uptime string (from `uptime` on the instance), not the game process lifetime."
+        >
           <span className="line-clamp-2 font-mono text-xs text-muted-foreground">
             {snap?.system?.uptime?.replace(/^up\s*/i, "") ?? "—"}
           </span>
@@ -427,7 +448,12 @@ export function DashboardClient() {
       />
 
       {/* Quick actions */}
-      <section className="flex flex-wrap gap-2">
+      <section className="space-y-2">
+        <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <span>Quick actions</span>
+          <Hint label="Start launches the game in the configured tmux session on the remote host. Stop sends Ctrl-C then kills tmux. Restart stops then starts. Safe start only runs if the server isn’t already marked Up." />
+        </div>
+        <div className="flex flex-wrap gap-2">
         <Button
           className="min-h-11 min-w-[7rem] touch-manipulation sm:min-h-8"
           onClick={() => run("start", () => actionStartServer() as Promise<{ ok: boolean; error?: string }>)}
@@ -491,19 +517,26 @@ export function DashboardClient() {
           Logs
           <ArrowUpRight className="size-3.5 opacity-70" aria-hidden />
         </Link>
+        </div>
       </section>
 
       {/* Diagnostics strip */}
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Card className="border-border/70">
           <CardContent className="space-y-1 p-3">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Port</p>
+            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Port
+              <Hint label="Game/query port from panel env (REFORGER_CHECK_PORT / default 2001). Used when grepping ss output—not a live UDP ping." />
+            </p>
             <p className="font-mono text-xs text-foreground">{s?.checkPort ?? "—"}</p>
           </CardContent>
         </Card>
         <Card className="border-border/70">
           <CardContent className="space-y-1 p-3">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">tmux</p>
+            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              tmux
+              <Hint label="Named tmux session from REFORGER_TMUX_SESSION. The dedicated server is started inside this session so it survives SSH disconnect." />
+            </p>
             <p className="font-mono text-xs text-foreground">{s?.tmuxSession ?? "—"}</p>
             <Badge variant={st?.tmuxSessionExists ? "default" : "secondary"} className="text-[10px]">
               {st?.tmuxSessionExists ? "yes" : "no"}
@@ -512,7 +545,10 @@ export function DashboardClient() {
         </Card>
         <Card className="border-border/70">
           <CardContent className="space-y-1 p-3">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Public IP</p>
+            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Public IP
+              <Hint label="publicAddress from remote config.json. Compared to the panel’s SSH host to flag joinability mismatches." />
+            </p>
             <p className="truncate font-mono text-xs text-foreground" title={publicAddr ?? ""}>
               {publicAddr ?? "—"}
             </p>
@@ -525,7 +561,10 @@ export function DashboardClient() {
         </Card>
         <Card className="border-border/70">
           <CardContent className="space-y-1 p-3">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Process</p>
+            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Process
+              <Hint label="Whether pgrep saw ArmaReforger / enfMain / EnforceMain on the host. If tmux is yes but this is no, the game may still be starting." />
+            </p>
             <Badge variant={st?.processRunning ? "default" : "secondary"} className="text-[10px]">
               {st?.processRunning ? "Arma seen" : "not seen"}
             </Badge>
@@ -533,7 +572,10 @@ export function DashboardClient() {
         </Card>
         <Card className="border-border/70">
           <CardContent className="space-y-1 p-3">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Mods</p>
+            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Mods
+              <Hint label="Same count as the Mods stat card — workshop entries under game.mods." />
+            </p>
             <p className="font-mono text-xs">{modCount ?? "—"}</p>
           </CardContent>
         </Card>
@@ -543,7 +585,10 @@ export function DashboardClient() {
       <details className="group rounded-2xl border border-border/70 bg-muted/10 open:bg-muted/20">
         <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring md:px-5 md:py-4 [&::-webkit-details-marker]:hidden">
           <span className="flex items-center justify-between gap-2">
-            <span>Advanced</span>
+            <span className="flex items-center gap-1.5">
+              Advanced
+              <Hint label="Raw ss output, memory, process list, and paths—useful for support tickets. Nothing here is sent automatically." />
+            </span>
             <span className="text-[11px] font-normal text-muted-foreground group-open:hidden">Show raw data</span>
             <span className="hidden text-[11px] font-normal text-muted-foreground group-open:inline">Hide</span>
           </span>
@@ -618,8 +663,11 @@ export function DashboardClient() {
               {snap?.system.uname ?? "—"}
             </pre>
           </div>
-          <div>
-            <p className="mb-1 text-[10px] uppercase text-muted-foreground">Sticky notes (this browser)</p>
+            <div>
+              <p className="mb-1 flex items-center gap-1 text-[10px] uppercase text-muted-foreground">
+                Sticky notes (this browser)
+                <Hint label="Stored only in localStorage in this browser—never on the server. Handy for ops reminders." />
+              </p>
             <Textarea
               placeholder="Internal notes…"
               value={stickyNotes}
@@ -631,7 +679,12 @@ export function DashboardClient() {
       </details>
 
       {/* Secondary actions (collapsed tools) */}
-      <div className="flex flex-wrap gap-2 border-t border-border/40 pt-4">
+      <div className="space-y-2 border-t border-border/40 pt-4">
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span>Tools</span>
+          <Hint label="Lightweight SSH one-offs: fetch fresh memory/process snapshot, re-run port grep, or pull a short log tail into a toast." />
+        </div>
+        <div className="flex flex-wrap gap-2">
         <Button
           variant="ghost"
           size="sm"
@@ -680,6 +733,7 @@ export function DashboardClient() {
           {actionKey === "logs" ? <Loader2 className="mr-2 size-4 animate-spin" /> : <ScrollText className="mr-2 size-4" />}
           Peek logs
         </Button>
+        </div>
       </div>
     </div>
   );

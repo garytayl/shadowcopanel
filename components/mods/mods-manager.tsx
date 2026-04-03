@@ -18,7 +18,9 @@ import {
   saveModsAction,
   type ModRowPayload,
 } from "@/lib/actions/mods";
+import { Hint } from "@/components/dashboard/hint";
 import { ConfigAnomalyBanner } from "@/components/panel/config-anomaly-banner";
+import { TitleWithHint } from "@/components/panel/label-with-hint";
 import { downloadTextFile } from "@/lib/utils/download";
 import type { ConfigNormalizationIssue } from "@/lib/reforger/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -173,7 +175,11 @@ export function ModsManager() {
 
       <Card className="rounded-2xl border-border/80">
         <CardHeader>
-          <CardTitle className="text-base">Mods</CardTitle>
+          <CardTitle className="text-base">
+            <TitleWithHint hint="Order matters: mods load top-to-bottom. The server JSON stores only modId, name, and version under game.mods.">
+              Mods
+            </TitleWithHint>
+          </CardTitle>
           <CardDescription>
             “Enabled” is UI-only: disabled rows are not written to the server. The panel saves workshop mods only
             under <code className="text-xs">game.mods</code> (canonical Reforger shape).
@@ -183,11 +189,36 @@ export function ModsManager() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[28%]">modId</TableHead>
-                <TableHead className="w-[22%]">name</TableHead>
-                <TableHead className="w-[14%]">version</TableHead>
-                <TableHead>enabled</TableHead>
-                <TableHead className="text-right">order / remove</TableHead>
+                <TableHead className="w-[28%]">
+                  <span className="inline-flex items-center gap-1">
+                    modId
+                    <Hint label="Workshop asset ID (GUID). Must match the mod you published or subscribed to." />
+                  </span>
+                </TableHead>
+                <TableHead className="w-[22%]">
+                  <span className="inline-flex items-center gap-1">
+                    name
+                    <Hint label="Human-readable title; must be non-empty for a row to save to the server." />
+                  </span>
+                </TableHead>
+                <TableHead className="w-[14%]">
+                  <span className="inline-flex items-center gap-1">
+                    version
+                    <Hint label="Workshop version string for this mod pin. Required for save validation." />
+                  </span>
+                </TableHead>
+                <TableHead>
+                  <span className="inline-flex items-center gap-1">
+                    enabled
+                    <Hint label="Off = row kept in the panel but not written to game.mods (mod won’t load)." />
+                  </span>
+                </TableHead>
+                <TableHead className="text-right">
+                  <span className="inline-flex items-center justify-end gap-1">
+                    order / remove
+                    <Hint label="Load order: first row loads first. Delete removes the row from your next save." />
+                  </span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -295,7 +326,11 @@ export function ModsManager() {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
         <Card className="rounded-2xl border-border/80">
           <CardHeader>
-            <CardTitle className="text-base">JSON preview (mods block)</CardTitle>
+            <CardTitle className="text-base">
+              <TitleWithHint hint="What will be written under game.mods for enabled rows. Disabled rows are omitted entirely.">
+                JSON preview (mods block)
+              </TitleWithHint>
+            </CardTitle>
             <CardDescription>
               Approximation of <code className="text-xs">game.mods</code> (enabled rows only)
             </CardDescription>
