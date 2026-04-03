@@ -1,6 +1,14 @@
-# Reforger Control Panel
+# Reforger Control
 
-Production-minded v1 web UI for managing an **Arma Reforger** dedicated server on **Ubuntu EC2** over **SSH**. The Next.js server runs privileged commands and SFTP; the browser never receives private keys.
+Web app to **start, stop, and configure** an **Arma Reforger** dedicated server from the browser—no AWS console required for day‑to‑day use.
+
+## New to cloud hosting?
+
+- **You rent a server** somewhere (often called a VPS, cloud instance, or “EC2”). It’s just a computer on the internet that runs 24/7.
+- **This app** is a website that talks to *that* computer using a secure login (**SSH**). Your players never see your private key; only the server that runs this app does.
+- **You don’t need to know Amazon or AWS** to use the panels. If something says “connection” or “firewall,” it usually means: allow the app to reach your machine on **port 22**, or paste your **key** into your hosting provider’s environment variables (see `.env.example`).
+
+The UI is written for operators first; technical names still appear in **Settings** so you can share them with support.
 
 ## Stack
 

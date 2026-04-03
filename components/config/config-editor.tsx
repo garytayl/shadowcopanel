@@ -137,20 +137,21 @@ export function ConfigEditor() {
   return (
     <div className="space-y-6">
       <Alert className="rounded-2xl border-amber-500/40 bg-amber-500/5">
-        <AlertTitle>Secrets</AlertTitle>
+        <AlertTitle>Passwords &amp; privacy</AlertTitle>
         <AlertDescription>
-          Password fields are edited here and written to the remote JSON. Do not commit real secrets; restrict who can reach this app.
+          Server passwords you type here are saved to your cloud machine when you click Save. Don’t share
+          screenshots of this page publicly. Only people you trust should have access to this website.
         </AlertDescription>
       </Alert>
 
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => void load()} disabled={loading || saving}>
           {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Download className="mr-2 size-4" />}
-          Load from server
+          Load current file from server
         </Button>
         <Button type="button" variant="outline" onClick={() => void downloadExport()} disabled={saving}>
           {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <FileDown className="mr-2 size-4" />}
-          Download JSON backup
+          Download a backup copy
         </Button>
       </div>
 
@@ -165,7 +166,9 @@ export function ConfigEditor() {
             <Card className="rounded-2xl border-border/80">
               <CardHeader>
                 <CardTitle className="text-base">Server &amp; network</CardTitle>
-                <CardDescription>Maps into your Reforger config object (nested keys preserved on save)</CardDescription>
+                <CardDescription>
+                  Common options in plain language—other advanced fields stay in the file when you save
+                </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2 md:col-span-2">
@@ -291,7 +294,7 @@ export function ConfigEditor() {
           <Card className="rounded-2xl border-border/80">
             <CardHeader>
               <CardTitle className="text-base">Raw JSON</CardTitle>
-              <CardDescription>Validate before save — invalid JSON will be rejected</CardDescription>
+              <CardDescription>For advanced users—broken JSON will be rejected to protect your server</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <ScrollArea className="h-[min(60vh,520px)] rounded-xl border border-border/80">

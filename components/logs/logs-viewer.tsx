@@ -112,8 +112,8 @@ export function LogsViewer() {
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
           <Card className="rounded-2xl border-border/80">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Health summary</CardTitle>
-              <CardDescription>Heuristic counts from the current buffer</CardDescription>
+              <CardTitle className="text-base">Quick health hints</CardTitle>
+              <CardDescription>Automatic guesses from the text on screen—not a substitute for reading the log</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
               <Badge variant="secondary">ERROR-ish lines: {health.errorCount}</Badge>
@@ -135,7 +135,7 @@ export function LogsViewer() {
             Quick filters
           </CardTitle>
           <CardDescription>
-            Toggle one or more; lines matching any selected filter pass. Clear all to show full log.
+            Tap a keyword to show only lines that match. Use several at once. Clear to see everything again.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
@@ -158,8 +158,10 @@ export function LogsViewer() {
 
       <Card className="rounded-2xl border-border/80">
         <CardHeader>
-          <CardTitle className="text-base">Remote output</CardTitle>
-          <CardDescription>Terminal-style view — latest discovered log file or REFORGER_LOG_GLOB</CardDescription>
+          <CardTitle className="text-base">Log text</CardTitle>
+          <CardDescription>
+            Reads the newest log file we can find on your server (or a fixed path if your host set one)
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <ScrollArea className="h-[min(70vh,640px)] rounded-xl border border-border/80 bg-[#0a0a0b]">

@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/sheet";
 
 const links = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Home", icon: LayoutDashboard },
   { href: "/config", label: "Config", icon: FileJson },
   { href: "/mods", label: "Mods", icon: Package },
   { href: "/logs", label: "Logs", icon: ScrollText },
@@ -95,8 +95,9 @@ export function Sidebar() {
           <ThemeToggle />
         </div>
         <NavList />
-        <div className="px-4 py-3 text-[10px] uppercase tracking-wider text-muted-foreground">
-          v0.2 · EC2 / SSH
+        <div className="px-4 py-3 text-[10px] leading-snug text-muted-foreground">
+          <span className="block uppercase tracking-wider">v0.2</span>
+          <span className="mt-1 block normal-case">Cloud server control</span>
         </div>
       </aside>
 

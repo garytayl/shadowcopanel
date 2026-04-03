@@ -16,10 +16,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Reforger Control Panel",
+    default: "Reforger Control",
     template: "%s · Reforger Control",
   },
-  description: "Arma Reforger dedicated server control over SSH",
+  description:
+    "Control your Arma Reforger dedicated server from the web—start, stop, config, and logs without using the cloud console.",
 };
 
 export default function RootLayout({

@@ -162,9 +162,11 @@ export function DashboardClient() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Activity className="size-4 text-primary" />
-                Server status
+                Is the game running?
               </CardTitle>
-              <CardDescription>tmux session + process heuristic</CardDescription>
+              <CardDescription>
+                Best guess from background session + game process (not 100% exact, but usually right)
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               {loading && !snap ? (
@@ -174,15 +176,15 @@ export function DashboardClient() {
                   <div className="flex flex-wrap gap-2">
                     <StatusBadge
                       ok={!!st?.serverLikelyUp}
-                      label={st?.serverLikelyUp ? "Likely running" : "Not running / unknown"}
+                      label={st?.serverLikelyUp ? "Probably running" : "Stopped or unknown"}
                     />
                     <StatusBadge
                       ok={!!st?.tmuxSessionExists}
-                      label={st?.tmuxSessionExists ? "tmux session" : "no tmux"}
+                      label={st?.tmuxSessionExists ? "Background session OK" : "No background session"}
                     />
                     <StatusBadge
                       ok={!!st?.processRunning}
-                      label={st?.processRunning ? "process seen" : "no process"}
+                      label={st?.processRunning ? "Game process seen" : "No game process"}
                     />
                   </div>
                 </>
@@ -200,9 +202,9 @@ export function DashboardClient() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Server className="size-4 text-primary" />
-                EC2 target
+                Your cloud server
               </CardTitle>
-              <CardDescription>SSH destination from env</CardDescription>
+              <CardDescription>Address this app uses to reach your rented machine</CardDescription>
             </CardHeader>
             <CardContent className="font-mono text-xs leading-relaxed text-muted-foreground">
               {s?.configured ? (
@@ -216,10 +218,10 @@ export function DashboardClient() {
                       variant="ghost"
                       size="icon"
                       className="size-7 shrink-0"
-                      title="Copy SSH target"
+                      title="Copy address"
                       onClick={() => {
                         void navigator.clipboard.writeText(`${s.user}@${s.host}`);
-                        toast.success("Copied user@host");
+                        toast.success("Copied login address");
                       }}
                     >
                       <ClipboardCopy className="size-3.5" />
@@ -230,7 +232,7 @@ export function DashboardClient() {
                   </div>
                 </>
               ) : (
-                <span className="text-amber-500">Not configured — see Settings</span>
+                <span className="text-amber-500">Not set up yet — open Connection details (Settings)</span>
               )}
             </CardContent>
           </Card>
@@ -245,15 +247,15 @@ export function DashboardClient() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <ShieldCheck className="size-4 text-primary" />
-                SSH
+                Link test
               </CardTitle>
-              <CardDescription>Control plane connectivity</CardDescription>
+              <CardDescription>Can this website reach your server right now?</CardDescription>
             </CardHeader>
             <CardContent className="text-sm">
               {st ? (
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <StatusBadge ok={st.sshReachable} label={st.sshReachable ? "Reachable" : "Unreachable"} />
+                    <StatusBadge ok={st.sshReachable} label={st.sshReachable ? "Connected" : "Can’t connect"} />
                     {typeof st.sshLatencyMs === "number" ? (
                       <span className="text-muted-foreground">{st.sshLatencyMs} ms</span>
                     ) : null}
@@ -276,8 +278,8 @@ export function DashboardClient() {
         >
           <Card className="rounded-2xl border-border/80">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Instance notes</CardTitle>
-              <CardDescription>REFORGER_INSTANCE_NOTES</CardDescription>
+              <CardTitle className="text-base">Your notes</CardTitle>
+              <CardDescription>Optional reminder (set in hosting settings)</CardDescription>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
               {s?.instanceNotes ? s.instanceNotes : "—"}
@@ -294,8 +296,9 @@ export function DashboardClient() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Network className="size-4 text-primary" />
-                Config path
+                Settings file on the server
               </CardTitle>
+              <CardDescription className="text-xs">Where config.json lives (advanced)</CardDescription>
             </CardHeader>
             <CardContent className="break-all font-mono text-xs text-muted-foreground">
               {s?.configPath ?? "—"}
@@ -312,10 +315,10 @@ export function DashboardClient() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <EthernetPort className="size-4 text-primary" />
-                Listening ports
+                Network ports
               </CardTitle>
               <CardDescription>
-                <code className="text-xs">ss -tulnp | grep</code> (see REFORGER_CHECK_PORT)
+                Snippet of open ports (game port matches your REFORGER_CHECK_PORT setting)
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -333,13 +336,13 @@ export function DashboardClient() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <HardDrive className="size-4 text-primary" />
-                Remote system
+                Computer health (cloud)
               </CardTitle>
-              <CardDescription>Kernel, uptime, root disk, load, tmux (one SSH round-trip)</CardDescription>
+              <CardDescription>OS, uptime, disk space, load, and background sessions</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <div>
-                <p className="mb-1 text-[10px] uppercase text-muted-foreground">Kernel</p>
+                <p className="mb-1 text-[10px] uppercase text-muted-foreground">Operating system</p>
                 <pre className="max-h-24 overflow-auto rounded-lg bg-muted/50 p-2 font-mono text-[10px] leading-relaxed">
                   {snap.system.uname}
                 </pre>
@@ -349,15 +352,15 @@ export function DashboardClient() {
                 <pre className="rounded-lg bg-muted/50 p-2 font-mono text-[10px]">{snap.system.uptime}</pre>
               </div>
               <div>
-                <p className="mb-1 text-[10px] uppercase text-muted-foreground">Disk /</p>
+                <p className="mb-1 text-[10px] uppercase text-muted-foreground">Disk space (main drive)</p>
                 <pre className="rounded-lg bg-muted/50 p-2 font-mono text-[10px]">{snap.system.diskRoot}</pre>
               </div>
               <div>
-                <p className="mb-1 text-[10px] uppercase text-muted-foreground">Load</p>
+                <p className="mb-1 text-[10px] uppercase text-muted-foreground">How busy the CPU is</p>
                 <pre className="rounded-lg bg-muted/50 p-2 font-mono text-[10px]">{snap.system.loadavg}</pre>
               </div>
               <div className="md:col-span-2 lg:col-span-2">
-                <p className="mb-1 text-[10px] uppercase text-muted-foreground">tmux</p>
+                <p className="mb-1 text-[10px] uppercase text-muted-foreground">Background sessions</p>
                 <pre className="max-h-20 overflow-auto rounded-lg bg-muted/50 p-2 font-mono text-[10px]">
                   {snap.system.tmuxSessions}
                 </pre>
@@ -370,7 +373,7 @@ export function DashboardClient() {
       <Card className="rounded-2xl border-border/80">
         <CardHeader>
           <CardTitle className="text-base">Quick actions</CardTitle>
-          <CardDescription>Runs privileged commands on the remote host over SSH</CardDescription>
+          <CardDescription>Runs safe commands on your cloud machine (same as you’d type in a terminal)</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           <Button
@@ -426,7 +429,7 @@ export function DashboardClient() {
               run("health", async () => {
                 const r = await actionCheckHealth();
                 if (r.ok) {
-                  toast.message("Health snapshot", {
+                  toast.message("Memory & CPU snapshot", {
                     description: `${r.data.free.slice(0, 120)}…`,
                   });
                 }
@@ -440,7 +443,7 @@ export function DashboardClient() {
             ) : (
               <Cpu className="mr-2 size-4" />
             )}
-            Check health
+            Memory &amp; CPU check
           </Button>
           <Button
             size="sm"
@@ -455,7 +458,7 @@ export function DashboardClient() {
             ) : (
               <EthernetPort className="mr-2 size-4" />
             )}
-            Check ports
+            Refresh port list
           </Button>
           <Button
             size="sm"
@@ -478,7 +481,7 @@ export function DashboardClient() {
             ) : (
               <ScrollText className="mr-2 size-4" />
             )}
-            Fetch latest logs
+            Peek at latest logs
           </Button>
         </CardContent>
       </Card>
@@ -486,7 +489,7 @@ export function DashboardClient() {
       {snap?.health ? (
         <Card className="rounded-2xl border-border/80">
           <CardHeader>
-            <CardTitle className="text-base">Memory &amp; process (last refresh)</CardTitle>
+            <CardTitle className="text-base">Memory &amp; running programs (last refresh)</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <pre className="max-h-40 overflow-auto rounded-xl bg-muted/50 p-4 font-mono text-[11px] leading-relaxed">

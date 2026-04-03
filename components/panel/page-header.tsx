@@ -1,13 +1,17 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 
 export function PageHeader({
   title,
   description,
+  children,
 }: {
   title: string;
   description?: string;
+  /** Extra help (e.g. InPlainEnglish) — renders below the subtitle */
+  children?: ReactNode;
 }) {
   return (
     <motion.div
@@ -20,6 +24,7 @@ export function PageHeader({
       {description ? (
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
       ) : null}
+      {children ? <div className="mt-4 max-w-3xl">{children}</div> : null}
     </motion.div>
   );
 }

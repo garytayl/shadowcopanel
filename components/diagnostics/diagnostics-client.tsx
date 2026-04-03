@@ -54,18 +54,19 @@ export function DiagnosticsClient() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Activity className="size-4" />
-                SSH ping
+                Connection speed test
               </CardTitle>
+              <CardDescription>Round-trip time to your server (lower is better)</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap items-center gap-2 text-sm">
               {d.ping.ok ? (
                 <>
-                  <Badge variant="default">Reachable</Badge>
+                  <Badge variant="default">OK</Badge>
                   <span className="text-muted-foreground">{d.ping.latencyMs} ms</span>
                 </>
               ) : (
                 <>
-                  <Badge variant="destructive">Failed</Badge>
+                  <Badge variant="destructive">Problem</Badge>
                   <span className="text-destructive">{d.ping.message}</span>
                 </>
               )}
@@ -77,12 +78,12 @@ export function DiagnosticsClient() {
       {d?.system ? (
         <Card className="rounded-2xl border-border/80">
           <CardHeader>
-            <CardTitle className="text-base">Remote system</CardTitle>
-            <CardDescription>uname, uptime, root filesystem, load average, tmux</CardDescription>
+            <CardTitle className="text-base">Machine details</CardTitle>
+            <CardDescription>OS name, uptime, disk space, how busy the CPU is, background sessions</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div>
-              <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Kernel</p>
+              <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">System</p>
               <pre className="max-h-32 overflow-auto rounded-lg bg-muted/50 p-3 font-mono text-[11px] leading-relaxed">
                 {d.system.uname}
               </pre>
@@ -112,7 +113,7 @@ export function DiagnosticsClient() {
       {d?.health ? (
         <Card className="rounded-2xl border-border/80">
           <CardHeader>
-            <CardTitle className="text-base">Memory &amp; process</CardTitle>
+            <CardTitle className="text-base">Memory &amp; programs</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <pre className="max-h-48 overflow-auto rounded-xl bg-muted/50 p-4 font-mono text-[11px]">
@@ -128,8 +129,8 @@ export function DiagnosticsClient() {
       {d?.portsSample ? (
         <Card className="rounded-2xl border-border/80">
           <CardHeader>
-            <CardTitle className="text-base">Listening sockets (sample)</CardTitle>
-            <CardDescription>From <code className="text-xs">ss</code> + configured port filter on dashboard</CardDescription>
+            <CardTitle className="text-base">Open network ports (sample)</CardTitle>
+            <CardDescription>What the server reports is listening—useful for firewall or port issues</CardDescription>
           </CardHeader>
           <CardContent>
             <pre className="max-h-64 overflow-auto rounded-xl bg-muted/50 p-4 font-mono text-[11px] leading-relaxed">

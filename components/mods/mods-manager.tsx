@@ -117,10 +117,10 @@ export function ModsManager() {
   return (
     <div className="space-y-6">
       <Alert className="rounded-2xl border-amber-500/40 bg-amber-500/5">
-        <AlertTitle>Mod load</AlertTitle>
+        <AlertTitle>Go easy when adding mods</AlertTitle>
         <AlertDescription>
-          Adding many large mods at once can destabilize startup, increase load times, and make failures harder to debug.
-          Stage changes and watch logs after each batch.
+          Dropping in lots of heavy mods at once can make the server slow to start or crash on load. Add a few
+          at a time, save, then check the Logs page if something goes wrong.
         </AlertDescription>
       </Alert>
 
@@ -164,7 +164,8 @@ export function ModsManager() {
         <CardHeader>
           <CardTitle className="text-base">Mods</CardTitle>
           <CardDescription>
-            The <code className="text-xs">enabled</code> flag is stored in JSON for this panel; verify your server accepts extra keys or adjust as needed.
+            “Enabled” is saved in your config so you can turn mods off without deleting the row. Some setups
+            ignore unknown fields—if the game complains, ask in your community.
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto">
