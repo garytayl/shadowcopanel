@@ -45,12 +45,22 @@ function MobileNav() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
-        render={<Button variant="ghost" size="icon" aria-label="Open menu" />}
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            className="min-h-11 min-w-11 touch-manipulation"
+            aria-label="Open navigation menu"
+          />
+        }
       >
-        <Menu className="size-5" />
+        <Menu className="size-5" aria-hidden />
       </SheetTrigger>
-      <SheetContent side="left" className="w-64 p-0">
-        <SheetHeader className="border-b border-border/60 p-4 text-left">
+      <SheetContent
+        side="left"
+        className="w-[min(100vw-1rem,18rem)] max-w-[85vw] p-0 safe-area-t pb-[max(1rem,env(safe-area-inset-bottom,0px))]"
+      >
+        <SheetHeader className="border-b border-border/60 p-4 text-left safe-area-x">
           <SheetTitle>Reforger Control</SheetTitle>
         </SheetHeader>
         <NavList onNavigate={() => setOpen(false)} layoutHighlight={false} />
@@ -69,7 +79,7 @@ function NavList({
 }) {
   const pathname = usePathname();
   return (
-    <nav className="flex flex-col gap-0.5 p-3">
+    <nav className="flex flex-col gap-1 p-3 safe-area-x" aria-label="Primary">
       {links.map(({ href, label, icon: Icon }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         return (
@@ -78,7 +88,7 @@ function NavList({
             href={href}
             onClick={onNavigate}
             className={cn(
-              "group relative flex items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200",
+              "group relative flex min-h-11 items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200 active:bg-sidebar-accent/40",
               active
                 ? "text-sidebar-accent-foreground"
                 : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
@@ -132,7 +142,7 @@ export function Sidebar() {
         </div>
       </aside>
 
-      <div className="flex h-14 items-center justify-between border-b border-border/60 bg-background/80 px-2 backdrop-blur-md lg:hidden">
+      <div className="flex min-h-14 items-center justify-between border-b border-border/60 bg-background/80 px-2 backdrop-blur-md safe-area-t safe-area-x lg:hidden">
         <div className="flex min-w-0 items-center gap-1">
           <MobileNav />
           <span className="truncate bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text font-semibold tracking-tight text-transparent dark:from-teal-200 dark:to-amber-100/90">

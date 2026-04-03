@@ -78,32 +78,43 @@ export function LogsViewer() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={() => void refresh()} disabled={loading} variant="outline" size="sm">
-          {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
-          Refresh logs
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            const body = displayLines.join("\n");
-            downloadTextFile(
-              `reforger-logs-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`,
-              body,
-            );
-          }}
-        >
-          <Download className="mr-2 size-4" />
-          Download view
-        </Button>
-        <div className="relative min-w-[200px] flex-1 max-w-md">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={() => void refresh()}
+            disabled={loading}
+            variant="outline"
+            size="default"
+            className="min-h-11 touch-manipulation sm:min-h-8"
+          >
+            {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
+            Refresh logs
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="default"
+            className="min-h-11 touch-manipulation sm:min-h-8"
+            onClick={() => {
+              const body = displayLines.join("\n");
+              downloadTextFile(
+                `reforger-logs-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`,
+                body,
+              );
+            }}
+          >
+            <Download className="mr-2 size-4" />
+            Download view
+          </Button>
+        </div>
+        <div className="relative min-w-0 flex-1 sm:min-w-[200px] sm:max-w-md">
           <Input
             placeholder="Search in output…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="rounded-xl"
+            className="min-h-11 rounded-xl text-base sm:h-8 sm:min-h-8 sm:text-sm"
+            autoComplete="off"
+            enterKeyHint="search"
           />
         </div>
       </div>
@@ -145,12 +156,19 @@ export function LogsViewer() {
               type="button"
               size="sm"
               variant={activeFilters.has(f.label) ? "default" : "outline"}
+              className="min-h-11 touch-manipulation sm:min-h-8"
               onClick={() => toggleFilter(f.label)}
             >
               {f.label}
             </Button>
           ))}
-          <Button type="button" size="sm" variant="ghost" onClick={() => setActiveFilters(new Set())}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="min-h-11 touch-manipulation sm:min-h-8"
+            onClick={() => setActiveFilters(new Set())}
+          >
             Clear filters
           </Button>
         </CardContent>
@@ -164,8 +182,8 @@ export function LogsViewer() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[min(70vh,640px)] rounded-xl border border-border/80 bg-[#0a0a0b]">
-            <pre className="p-4 font-mono text-[11px] leading-relaxed text-zinc-200">
+          <ScrollArea className="h-[min(55dvh,640px)] max-h-[70vh] rounded-xl border border-border/80 bg-[#0a0a0b] sm:h-[min(70vh,640px)]">
+            <pre className="touch-pan-y overflow-x-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200 sm:p-4 sm:text-[11px]">
               {displayLines.join("\n")}
             </pre>
           </ScrollArea>

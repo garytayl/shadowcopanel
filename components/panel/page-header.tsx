@@ -21,9 +21,9 @@ export function PageHeader({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: reduce ? 0.15 : 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className="mb-6 md:mb-8"
+      className="mb-6 text-pretty md:mb-8"
     >
-      <h1 className="text-2xl font-bold tracking-tight md:text-3xl lg:text-4xl">
+      <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
         <span className="inline-flex flex-wrap gap-x-2 gap-y-1">
           {words.map((word, i) => (
             <motion.span
@@ -47,7 +47,7 @@ export function PageHeader({
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: reduce ? 0 : 0.12, duration: 0.35 }}
-          className="mt-2 max-w-2xl text-sm text-muted-foreground"
+          className="mt-2 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-sm"
         >
           {description}
         </motion.p>

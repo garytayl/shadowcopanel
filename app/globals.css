@@ -134,6 +134,9 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     scroll-behavior: smooth;
+    /* Prevent iOS from inflating small text in landscape */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
   @media (prefers-reduced-motion: reduce) {
     html {
@@ -366,6 +369,12 @@
   z-index: -1;
 }
 
+/* Sonner: clear home indicator / notch on phones */
+[data-sonner-toaster] {
+  bottom: max(0.75rem, env(safe-area-inset-bottom, 0px)) !important;
+  right: max(0.75rem, env(safe-area-inset-right, 0px)) !important;
+}
+
 /* Sonner toasts */
 [data-sonner-toaster] .cn-toast {
   border-radius: var(--radius-xl) !important;
@@ -424,5 +433,19 @@
   }
   [data-sonner-toaster] .cn-toast:hover {
     transform: none;
+  }
+}
+
+/* Mobile: notches + home indicator */
+@layer utilities {
+  .safe-area-x {
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  }
+  .safe-area-b {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  }
+  .safe-area-t {
+    padding-top: env(safe-area-inset-top, 0px);
   }
 }

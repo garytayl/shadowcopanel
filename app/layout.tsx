@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Syne } from "next/font/google";
 
 import { Providers } from "@/components/providers";
@@ -29,6 +29,18 @@ export const metadata: Metadata = {
     "Control your Arma Reforger dedicated server from the web—start, stop, config, and logs without using the cloud console.",
 };
 
+/** Mobile: correct scale, notched screens, allow pinch-zoom for accessibility */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "oklch(0.12 0.022 250)" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -37,7 +49,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark h-full" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${syne.variable} min-h-full flex flex-col bg-background font-sans antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${syne.variable} flex min-h-dvh touch-manipulation flex-col bg-background font-sans antialiased`}
       >
         <Providers>{children}</Providers>
       </body>
