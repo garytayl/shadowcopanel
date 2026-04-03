@@ -19,6 +19,7 @@ import { Kbd } from "@/components/ui/kbd";
 const PAGES = [
   { href: "/dashboard", label: "Home" },
   { href: "/config", label: "Server settings file" },
+  { href: "/marketplace", label: "Marketplace" },
   { href: "/mods", label: "Mods" },
   { href: "/logs", label: "Logs" },
   { href: "/diagnostics", label: "Diagnostics" },

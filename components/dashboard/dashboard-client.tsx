@@ -57,13 +57,13 @@ const AUTO_REFRESH_KEY = "reforger-dashboard-auto-refresh";
 const STICKY_NOTES_KEY = "reforger-dashboard-sticky-notes";
 
 function safeDashboardExport(snap: DashboardSnapshot) {
-  const settings = { ...snap.settings };
-  delete settings.privateKeyPath;
+  const { privateKeyPath: _pk, ...settingsRest } = snap.settings;
+  void _pk;
   return {
     exportedAt: new Date().toISOString(),
     exportKind: "reforger-control-panel-dashboard",
     settings: {
-      ...settings,
+      ...settingsRest,
       privateKeyPath: null,
     },
     status: snap.status,

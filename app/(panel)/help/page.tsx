@@ -61,6 +61,9 @@ export default function HelpPage() {
             <Link className="text-primary underline-offset-2 hover:underline" href="/config">
               Server settings file
             </Link>
+            <Link className="text-primary underline-offset-2 hover:underline" href="/marketplace">
+              Marketplace
+            </Link>
             <Link className="text-primary underline-offset-2 hover:underline" href="/mods">
               Mods
             </Link>

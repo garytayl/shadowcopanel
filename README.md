@@ -88,18 +88,27 @@ That almost always means **the TCP path to port 22 never completed the SSH hands
 3. **NACLs** and **instance firewall** (`ufw`) must also allow 22 if you use them.
 4. From your **Mac** (same key): `ssh -i ~/.ssh/your.pem ubuntu@YOUR_IP` — if that works but Vercel does not, it’s almost certainly **SG source IP** vs **Vercel**.
 
-## Features (v0.2)
+## Features (v0.3+)
 
 | Area        | Behavior |
 |------------|----------|
 | **Dashboard** | SSH reachability, tmux/process heuristics, EC2 target (copy **user@host**), **remote system** snapshot (kernel, uptime, disk, load, tmux), ports (`ss`), memory/process, **auto-refresh every 30s**, quick actions (start/stop/restart, health, ports, logs). |
 | **Config**    | Load/save `config.json` over SFTP; form + raw JSON; **download JSON backup**. |
-| **Mods**      | Table with reorder, enable toggle, JSON preview; **export mods JSON**; save to remote config. |
+| **Marketplace** | **Official Arma Reforger Workshop** (reforger.armaplatform.com) catalog: search, sort, optional tag filter, import by URL, mod detail with dependencies, **drag-and-drop server stack**, save to remote `config.json` (same `mods` array as **Mods**). Catalog fetch runs **only on the Next.js server** (see `lib/workshop/`). |
+| **Mods**      | Table-first editor: reorder, enable toggle, JSON preview; **export mods JSON**; save to remote config. |
 | **Logs**      | Tail logs, search + filters, health hints; **download current view** as `.txt`. |
 | **Diagnostics** | Dedicated page: SSH ping, full system snapshot, memory/pgrep, socket sample. |
 | **Settings**  | Read-only env-derived settings (Vercel troubleshooting). |
 | **Theme**     | Light/dark toggle (sidebar / mobile header). |
-| **API**       | `GET /api/health` — JSON for uptime monitors (`sshConfigured`, `sshReachable`, `latencyMs`). |
+| **API**       | `GET /api/health` — JSON for uptime monitors (`sshConfigured`, `sshReachable`, `latencyMs`). Workshop helpers: `GET /api/workshop/search`, `GET /api/workshop/mod?id=…`, `POST /api/workshop/import-url`. |
+
+### Marketplace (workshop catalog)
+
+- **What it does:** Lets you discover mods on the **Reforger Workshop** website (not Steam Workshop), preview metadata, and **compose the ordered `mods` list** that gets written to your server’s `config.json`.
+- **How it works:** The Next.js server requests the public workshop HTML and reads the embedded Next.js `__NEXT_DATA__` JSON (same payload the official site uses). That is normalized into typed models in `lib/workshop/reforger-workshop.ts`. The browser only calls **your** app’s `/api/workshop/*` routes, never the workshop origin directly.
+- **Caveats:** If Bohemia changes the workshop HTML layout or removes `__NEXT_DATA__`, search/detail may break until the parser is updated. The provider interface (`lib/workshop/provider.ts`) is the place to plug in a **future official HTTP API** without rewriting the UI.
+- **Dependencies:** “Add with dependencies” uses dependency metadata from the workshop when present. Some mods may still list requirements only in prose—always verify before going live.
+
 
 ## Remote server assumptions
 
