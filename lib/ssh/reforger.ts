@@ -24,6 +24,11 @@ export type ServerRuntimeStatus = {
 
 type ControlMeasure = Awaited<ReturnType<typeof measureControlLinkRoundTrip>>;
 
+/** Dedicated server process often appears as enfMain / EnforceMain in ps, not ArmaReforger in argv. */
+const REFORGER_PGREP_CMD =
+  "pgrep -af ArmaReforgerServer 2>/dev/null; pgrep -af ArmaReforger 2>/dev/null; pgrep -af enfMain 2>/dev/null; pgrep -af EnforceMain 2>/dev/null; true";
+const REFORGER_PROCESS_LINE_RE = /ArmaReforger|enfMain|EnforceMain/i;
+
 export async function getServerRuntimeStatus(opts?: {
   /** When provided, skips a second SSH measurement (e.g. joinability run). */
   control?: ControlMeasure;
@@ -52,10 +57,8 @@ export async function getServerRuntimeStatus(opts?: {
   }
 
   try {
-    const pg = await sshExec(
-      "pgrep -af ArmaReforgerServer 2>/dev/null || pgrep -af ArmaReforger 2>/dev/null || true",
-    );
-    processRunning = /ArmaReforger/i.test(pg.stdout);
+    const pg = await sshExec(REFORGER_PGREP_CMD);
+    processRunning = REFORGER_PROCESS_LINE_RE.test(pg.stdout);
   } catch {
     processRunning = false;
   }
@@ -133,9 +136,7 @@ export async function getHealthSnapshot(): Promise<{
   pgrep: string;
 }> {
   const free = await sshExec("free -m || true");
-  const pg = await sshExec(
-    "pgrep -af ArmaReforgerServer 2>/dev/null || pgrep -af ArmaReforger 2>/dev/null || true",
-  );
+  const pg = await sshExec(REFORGER_PGREP_CMD);
   return {
     free: free.stdout.trim(),
     pgrep: pg.stdout.trim(),
