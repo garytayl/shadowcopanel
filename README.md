@@ -1,36 +1,87 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Reforger Control Panel
 
-## Getting Started
+Production-minded v1 web UI for managing an **Arma Reforger** dedicated server on **Ubuntu EC2** over **SSH**. The Next.js server runs privileged commands and SFTP; the browser never receives private keys.
 
-First, run the development server:
+## Stack
+
+- Next.js (App Router), TypeScript, Tailwind CSS v4
+- shadcn/ui, lucide-react, Framer Motion
+- `ssh2` for server-side SSH/SFTP
+
+## Security warnings
+
+- **Do not expose this app to the public internet** without authentication, TLS, and network restrictions. Anyone who can use the UI can start/stop the game server and overwrite `config.json`.
+- **v1 has no login.** Treat as a localhost / VPN / tailnet tool until you add auth (see `lib/auth/placeholder.ts`).
+- Keep private keys **only** on the machine running Next.js (`REFORGER_SSH_PRIVATE_KEY_PATH` or inline `REFORGER_SSH_PRIVATE_KEY` in `.env.local`). Never import env or keys into client components.
+
+## Setup
+
+1. **Node.js 20+** recommended.
+
+2. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+3. Copy environment template:
+
+   ```bash
+   cp .env.example .env.local
+   ```
+
+4. Edit `.env.local`:
+
+   - Set `REFORGER_SSH_HOST` to your EC2 public IP or DNS.
+   - Set `REFORGER_SSH_USER` (often `ubuntu`).
+   - Set **`REFORGER_SSH_PRIVATE_KEY_PATH`** to an absolute path of your **local** PEM used to SSH to the instance (e.g. `~/.ssh/my-ec2.pem`). The control panel process reads this file; it is not uploaded to the repo.
+
+5. **SSH key permissions** (macOS/Linux):
+
+   ```bash
+   chmod 600 /path/to/your.pem
+   ```
+
+6. Run the dev server:
+
+   ```bash
+   npm run dev
+   ```
+
+7. Open [http://localhost:3000](http://localhost:3000) — you should land on **Dashboard**.
+
+## Production build
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run build
+npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Run `npm start` on a host that has outbound SSH to EC2 and the key file path configured.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Features (v1)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Area        | Behavior |
+|------------|----------|
+| **Dashboard** | SSH reachability, tmux/process heuristics, EC2 target, ports (`ss`), memory/process snippets, quick actions (start/stop/restart, health, ports, logs). |
+| **Config**    | Load/save `config.json` over SFTP; form fields + raw JSON editor. |
+| **Mods**      | Table with reorder, enable toggle, JSON preview; saves `mods` array to remote config. |
+| **Logs**      | Tails discovered logs (or `REFORGER_LOG_GLOB`), search + filters, simple health hints. |
+| **Settings**  | Read-only view of non-secret env-derived settings. |
 
-## Learn More
+## Remote server assumptions
 
-To learn more about Next.js, take a look at the following resources:
+- Ubuntu with tmux installed.
+- Reforger deployed under `REFORGER_SERVER_PATH` (default `/home/ubuntu/arma-reforger`).
+- Config at `REFORGER_CONFIG_PATH` (default `.../config.json`).
+- Server started in a tmux session named `REFORGER_TMUX_SESSION` (default `reforger`).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Adjust `REFORGER_SERVER_CMD` if your launch line differs.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Auth roadmap
 
-## Deploy on Vercel
+Integrate session auth (e.g. Auth.js) and protect routes via `middleware.ts`. See `lib/auth/placeholder.ts` for a short checklist.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Private / your use — add a license if you open-source the project.
