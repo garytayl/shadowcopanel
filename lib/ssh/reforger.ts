@@ -230,18 +230,10 @@ export async function getRecentLogs(lines = 400): Promise<string> {
     return r.stdout;
   }
 
-  const script = `
-set -euo pipefail
-ROOT=${JSON.stringify(serverPath)}
-L=$(find "$ROOT" -maxdepth 5 -type f \\( -name "*.log" -o -name "console.log" \\) 2>/dev/null | while read -r f; do
-  printf '%s\\t%s\\n' "$(stat -c %Y "$f" 2>/dev/null || echo 0)" "$f"
-done | sort -n | tail -1 | cut -f2- || true)
-if [ -z "$L" ]; then
-  echo "(no .log files discovered under $ROOT — set REFORGER_LOG_GLOB in .env.local)"
-else
-  tail -n ${lines} "$L"
-fi
-`.trim();
+  // Single-line script so it also works if the SSH layer passes the command as one `-lc` arg
+  // without newline decoding (see sshExec multiline handling).
+  const root = shSingleQuote(serverPath);
+  const script = `set -euo pipefail; ROOT=${root}; L=$(find "$ROOT" -maxdepth 5 -type f \\( -name "*.log" -o -name "console.log" \\) 2>/dev/null | while read -r f; do printf '%s\\t%s\\n' "$(stat -c %Y "$f" 2>/dev/null || echo 0)" "$f"; done | sort -n | tail -1 | cut -f2- || true); if [ -z "$L" ]; then echo "(no .log files discovered under $ROOT — set REFORGER_LOG_GLOB in .env.local)"; else tail -n ${lines} "$L"; fi`;
 
   const r = await sshExec(script);
   return r.stdout || r.stderr;

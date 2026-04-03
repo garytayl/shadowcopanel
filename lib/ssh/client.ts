@@ -67,10 +67,22 @@ function connectClient(): Promise<Client> {
 
 /**
  * Run a remote shell command. Uses `bash -lc` so operators can rely on PATH and `cd`.
+ *
+ * **Multiline:** `JSON.stringify` encodes newlines as `\` + `n`, which `bash -lc` does not
+ * interpret as line breaks — that breaks `$(…)` and control flow. For any script containing
+ * a real newline, we pipe `base64 -d` into `bash` instead.
  */
 export async function sshExec(command: string): Promise<ExecResult> {
   const client = await connectClient();
-  const wrapped = `bash -lc ${JSON.stringify(command)}`;
+  const normalized = command.replace(/\r\n/g, "\n");
+  const wrapped =
+    normalized.includes("\n") && normalized.trim().length > 0
+      ? (() => {
+          const b64 = Buffer.from(normalized, "utf8").toString("base64");
+          // Base64 alphabet has no single quotes; safe inside '…' for bash -lc.
+          return `bash -lc ${JSON.stringify(`echo '${b64}' | base64 -d | bash`)}`;
+        })()
+      : `bash -lc ${JSON.stringify(normalized)}`;
 
   try {
     return await new Promise<ExecResult>((resolve, reject) => {
