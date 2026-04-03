@@ -56,19 +56,28 @@ export function readLatencyHistory(): number[] {
   return readControlLinkHistory();
 }
 
+function medianMs(values: number[]): number {
+  if (!values.length) return NaN;
+  const s = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  if (s.length % 2 === 1) return s[mid]!;
+  return (s[mid - 1]! + s[mid]!) / 2;
+}
+
+/** Rolling stats for control-plane (SSH) RTT — sparkline + badge context. */
 export function getControlLinkStats(history: number[]): {
   current: number | null;
   avg: number | null;
+  median: number | null;
   trend: ControlLinkTrend;
 } {
   if (!history.length) {
-    return { current: null, avg: null, trend: "flat" };
+    return { current: null, avg: null, median: null, trend: "flat" };
   }
   const current = history[history.length - 1] ?? null;
-  const avg =
-    history.length > 0
-      ? Math.round(history.reduce((a, b) => a + b, 0) / history.length)
-      : null;
+  const sum = history.reduce((a, b) => a + b, 0);
+  const avg = Math.round(sum / history.length);
+  const med = Math.round(medianMs(history));
   let trend: ControlLinkTrend = "flat";
   if (history.length >= 6) {
     const last3 = history.slice(-3);
@@ -79,7 +88,7 @@ export function getControlLinkStats(history: number[]): {
     if (delta > 0.08) trend = "up";
     else if (delta < -0.08) trend = "down";
   }
-  return { current, avg, trend };
+  return { current, avg, median: Number.isFinite(med) ? med : null, trend };
 }
 
 export function LatencySparkline({

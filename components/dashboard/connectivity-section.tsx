@@ -20,8 +20,9 @@ import {
   hostsEffectivelyMatch,
 } from "@/lib/connectivity/joinability-model";
 import {
-  classifyControlLinkMs,
+  classifyControlLinkForBadge,
   controlLinkQualityLabel,
+  isTransientSpike,
 } from "@/lib/connectivity/control-link-labels";
 import type { DashboardSnapshot } from "@/lib/actions/dashboard";
 import type { JoinabilityResult } from "@/lib/types/connectivity";
@@ -118,8 +119,9 @@ export function ConnectivitySection({
   const st = snap?.status;
   const s = snap?.settings;
   const ms = st?.controlLinkRoundTripMs;
-  const quality = classifyControlLinkMs(ms);
   const stats = useMemo(() => getControlLinkStats(history), [history]);
+  const badgeQuality = classifyControlLinkForBadge(ms, stats.avg, history.length);
+  const showSpike = isTransientSpike(ms, stats.avg, history.length);
 
   const mem = snap?.health?.free ? parseFreeMemM(snap.health.free) : null;
   const disk = snap?.system?.diskRoot ? parseDfRootLine(snap.system.diskRoot) : null;
@@ -186,49 +188,95 @@ export function ConnectivitySection({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Control link */}
+        {/* Control link — panel→server SSH command RTT; not gameplay ping */}
         <Card className="border-border/60 bg-background/40">
           <CardContent className="space-y-3 p-4">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                <Radio className="size-3.5 text-primary/90" aria-hidden />
-                Control link latency
-                <Hint label="Time for the panel to run a tiny command over SSH. Useful for operator UX, not gameplay ping." />
-              </div>
-              <Badge
-                variant="outline"
-                className={cn(
-                  "font-normal",
-                  quality === "good" && "border-emerald-500/40 text-emerald-600 dark:text-emerald-400",
-                  quality === "moderate" && "border-amber-500/40 text-amber-700 dark:text-amber-300",
-                  quality === "slow" && "border-red-500/40 text-red-600 dark:text-red-400",
-                )}
-              >
-                {controlLinkQualityLabel(quality)}
-              </Badge>
-            </div>
-            <div className="flex flex-wrap items-end gap-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <p className="text-2xl font-semibold tabular-nums tracking-tight">
-                  {loading && !snap ? "…" : ms != null ? `${Math.round(ms)}` : "—"}
-                  <span className="ml-1 text-sm font-normal text-muted-foreground">ms</span>
-                </p>
-                <p className="text-[10px] text-muted-foreground">current sample</p>
-              </div>
-              <div>
-                <p className="text-lg font-medium tabular-nums text-muted-foreground">
-                  {stats.avg != null ? `${stats.avg}` : "—"}
-                  <span className="ml-1 text-xs">ms avg</span>
-                </p>
-                <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                  <TrendIcon t={stats.trend} />
-                  <span>trend</span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Radio className="size-3.5 text-primary/90" aria-hidden />
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Control round-trip
+                  </span>
+                  <Hint label="Includes SSH session setup and remote command execution. This is control-plane latency from this app to your instance — not in-game player ping." />
                 </div>
+                <p className="mt-0.5 text-[10px] text-muted-foreground/90">SSH command RTT · control link latency</p>
               </div>
-              <div className="ml-auto">
-                <LatencySparkline values={history} />
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                <Badge
+                  variant="outline"
+                  title="Based on rolling average when 2+ samples exist; avoids one outlier skewing status."
+                  className={cn(
+                    "font-normal",
+                    badgeQuality === "good" && "border-emerald-500/40 text-emerald-600 dark:text-emerald-400",
+                    badgeQuality === "moderate" && "border-amber-500/40 text-amber-700 dark:text-amber-300",
+                    badgeQuality === "slow" && "border-red-500/40 text-red-600 dark:text-red-400",
+                    badgeQuality === "unknown" && "border-border text-muted-foreground",
+                  )}
+                >
+                  {controlLinkQualityLabel(badgeQuality)}
+                </Badge>
+                {showSpike ? (
+                  <Badge
+                    variant="outline"
+                    className="border-amber-500/50 bg-amber-500/[0.12] font-normal text-[10px] text-amber-800 dark:text-amber-200"
+                    title="Latest sample is much higher than your recent average — often transient."
+                  >
+                    Transient spike
+                  </Badge>
+                ) : null}
               </div>
             </div>
+
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Latest</p>
+                <p className="text-xl font-semibold tabular-nums tracking-tight sm:text-2xl">
+                  {loading && !snap ? "…" : ms != null ? `${Math.round(ms)}` : "—"}
+                  <span className="ml-0.5 text-xs font-normal text-muted-foreground">ms</span>
+                </p>
+                <p className="text-[9px] leading-tight text-muted-foreground">This refresh</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Rolling avg
+                </p>
+                <p className="text-lg font-semibold tabular-nums text-foreground sm:text-xl">
+                  {stats.avg != null ? `${stats.avg}` : "—"}
+                  <span className="ml-0.5 text-xs font-normal text-muted-foreground">ms</span>
+                </p>
+                <p className="text-[9px] leading-tight text-muted-foreground">Status uses this</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Median</p>
+                <p className="text-lg font-semibold tabular-nums text-foreground sm:text-xl">
+                  {stats.median != null ? `${stats.median}` : "—"}
+                  <span className="ml-0.5 text-xs font-normal text-muted-foreground">ms</span>
+                </p>
+                <p className="text-[9px] leading-tight text-muted-foreground">Typical recent</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 border-t border-border/50 pt-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                <TrendIcon t={stats.trend} />
+                <span>
+                  Trend: recent window vs prior
+                  {stats.trend === "up"
+                    ? " (higher)"
+                    : stats.trend === "down"
+                      ? " (lower)"
+                      : " (flat)"}
+                </span>
+              </div>
+              <div className="flex flex-col items-end gap-1 sm:min-w-[140px]">
+                <LatencySparkline values={history} />
+                <span className="text-[9px] text-muted-foreground">Recent SSH command RTTs</span>
+              </div>
+            </div>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              Includes SSH connection and command execution overhead; not player ping.
+            </p>
           </CardContent>
         </Card>
 
