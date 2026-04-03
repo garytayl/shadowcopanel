@@ -1,9 +1,12 @@
+import { Tooltip } from "@base-ui/react/tooltip";
+
 import { AppFooter } from "@/components/panel/app-footer";
 import { GlobalAppChrome } from "@/components/panel/global-app-chrome";
 import { Sidebar } from "@/components/panel/sidebar";
 
 export function PanelShell({ children }: { children: React.ReactNode }) {
   return (
+    <Tooltip.Provider delay={160} closeDelay={40} timeout={300}>
     <div className="relative flex min-h-dvh flex-col overflow-x-hidden bg-background lg:flex-row">
       <div
         aria-hidden
@@ -34,5 +37,6 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
         <AppFooter />
       </div>
     </div>
+    </Tooltip.Provider>
   );
 }
