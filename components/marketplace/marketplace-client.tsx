@@ -1,16 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   AlertTriangle,
   ClipboardCopy,
   Download,
+  History,
+  Link2,
   Loader2,
   RotateCcw,
   Save,
   Search,
+  Star,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,6 +25,13 @@ import {
 import { downloadTextFile } from "@/lib/utils/download";
 import type { WorkshopCatalogMod, WorkshopSearchResult, WorkshopSort } from "@/lib/workshop/types";
 import { formatSubscriberCount, formatWorkshopRating } from "@/lib/utils/format";
+import {
+  isStarred,
+  pushRecent,
+  readRecent,
+  readStarred,
+  toggleStarred,
+} from "@/lib/marketplace/storage";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,8 +43,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { MarketplaceCatalogSkeleton } from "@/components/marketplace/marketplace-catalog-skeleton";
 import { ModDetailDialog } from "@/components/marketplace/mod-detail-dialog";
 import { MarketplaceStack } from "@/components/marketplace/marketplace-stack";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
 function uid() {
   return `row_${Math.random().toString(36).slice(2, 11)}`;
@@ -118,6 +132,19 @@ export function MarketplaceClient() {
   const [importUrl, setImportUrl] = useState("");
   const [importing, setImporting] = useState(false);
 
+  /** Bumps when localStorage-backed lists (starred / recent) change */
+  const [libraryTick, setLibraryTick] = useState(0);
+  const [starredOnly, setStarredOnly] = useState(false);
+  const [pageJump, setPageJump] = useState("");
+
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const catalogTopRef = useRef<HTMLDivElement | null>(null);
+
+  const handleModLoaded = useCallback((mod: WorkshopCatalogMod) => {
+    pushRecent({ modId: mod.modId, name: mod.name });
+    setLibraryTick((t) => t + 1);
+  }, []);
+
   const stackSig = useMemo(() => signature(rowsToPayload(stack)), [stack]);
   const dirty = stackSig !== remoteSig && !stackLoading;
 
@@ -137,6 +164,26 @@ export function MarketplaceClient() {
   useEffect(() => {
     void loadStack();
   }, [loadStack]);
+
+  useEffect(() => {
+    catalogTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [page]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+      const tag = t.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable) {
+        return;
+      }
+      e.preventDefault();
+      searchInputRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const runCatalogSearch = useCallback(async () => {
     setCatalogLoading(true);
@@ -279,12 +326,47 @@ export function MarketplaceClient() {
     ? Math.max(1, Math.ceil(catalog.totalCount / Math.max(1, catalog.pageSize)))
     : 1;
 
+  const stackSet = useMemo(() => new Set(stack.map((s) => s.modId)), [stack]);
+
+  let displayMods: WorkshopCatalogMod[] = [];
+  if (catalog) {
+    if (!starredOnly) {
+      displayMods = catalog.mods;
+    } else {
+      const ids = new Set(readStarred().map((s) => s.modId));
+      displayMods = catalog.mods.filter((m) => ids.has(m.modId));
+    }
+  }
+
+  const quickTags = useMemo(() => {
+    if (!catalog) return [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const m of catalog.mods) {
+      for (const t of m.tags ?? []) {
+        if (!t || seen.has(t)) continue;
+        seen.add(t);
+        out.push(t);
+        if (out.length >= 14) return out;
+      }
+    }
+    return out;
+  }, [catalog]);
+
+  const inStackOnPage = useMemo(() => {
+    if (!catalog) return 0;
+    return catalog.mods.filter((m) => stackSet.has(m.modId)).length;
+  }, [catalog, stackSet]);
+
+  const recentEntries = readRecent();
+  const starredEntries = readStarred();
+
   const jsonExport = useMemo(() => {
     return JSON.stringify({ mods: rowsToPayload(stack) }, null, 2);
   }, [stack]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" data-library-rev={libraryTick}>
       {dirty ? (
         <Alert className="rounded-2xl border-amber-500/40 bg-amber-500/[0.07]">
           <AlertTriangle className="size-4 text-amber-500" />
@@ -299,6 +381,7 @@ export function MarketplaceClient() {
 
       <div className="grid gap-8 lg:grid-cols-[1fr_min(100%,380px)] xl:grid-cols-[1fr_400px]">
         <motion.div
+          ref={catalogTopRef}
           className="min-w-0 space-y-4"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -317,8 +400,9 @@ export function MarketplaceClient() {
                     Search
                   </label>
                   <Input
+                    ref={searchInputRef}
                     id="mq"
-                    placeholder="Mod name or keyword…"
+                    placeholder="Mod name or keyword… (press / to focus)"
                     value={draftQuery}
                     onChange={(e) => setDraftQuery(e.target.value)}
                     onKeyDown={(e) => {
@@ -367,6 +451,44 @@ export function MarketplaceClient() {
                   className="rounded-xl"
                 />
               </div>
+              {quickTags.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Tags on this page</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {quickTags.map((t) => (
+                      <Button
+                        key={t}
+                        type="button"
+                        variant={tagFilter.trim().toLowerCase() === t.toLowerCase() ? "secondary" : "outline"}
+                        size="sm"
+                        className="h-7 rounded-full px-2.5 text-[11px] font-normal"
+                        onClick={() => {
+                          setTagFilter(t);
+                          setPage(1);
+                        }}
+                      >
+                        {t}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/15 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="starred-only"
+                    checked={starredOnly}
+                    onCheckedChange={(v) => setStarredOnly(!!v)}
+                    size="sm"
+                  />
+                  <Label htmlFor="starred-only" className="cursor-pointer text-sm font-normal">
+                    Starred only (this page)
+                  </Label>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {starredEntries.length} starred in browser · recents saved locally
+                </p>
+              </div>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" onClick={() => applySearch()} disabled={catalogLoading}>
                   {catalogLoading ? (
@@ -381,10 +503,22 @@ export function MarketplaceClient() {
                     <>
                       <span className="font-medium text-foreground">{catalog.totalCount.toLocaleString()}</span>{" "}
                       mods · page {catalog.page} of {totalPages}
+                      {catalogLoading ? (
+                        <span className="ml-2 inline-flex items-center gap-1 text-[11px] text-primary">
+                          <Loader2 className="size-3 animate-spin" />
+                          Refreshing…
+                        </span>
+                      ) : null}
                       <span className="mt-0.5 block text-[11px]">
                         Sorted by {sortOptionLabel(catalog.sort)}
                         {committedQuery.trim() ? ` · matching “${committedQuery.trim()}”` : ""}
                         {tagFilter.trim() ? ` · tag ${tagFilter.trim()}` : ""}
+                        {inStackOnPage > 0 ? (
+                          <>
+                            {" "}
+                            · <span className="text-foreground">{inStackOnPage}</span> on this page already in stack
+                          </>
+                        ) : null}
                       </span>
                     </>
                   ) : null}
@@ -420,20 +554,26 @@ export function MarketplaceClient() {
             </Alert>
           ) : null}
 
-          {catalogLoading && !catalog ? (
-            <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
-              <Loader2 className="size-5 animate-spin" />
-              Loading catalog…
-            </div>
-          ) : null}
+          {catalogLoading ? <MarketplaceCatalogSkeleton /> : null}
 
           {!catalogLoading && catalog && catalog.mods.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">No mods match this search.</p>
           ) : null}
 
-          {catalog && catalog.mods.length > 0 ? (
+          {!catalogLoading &&
+          catalog &&
+          catalog.mods.length > 0 &&
+          displayMods.length === 0 &&
+          starredOnly ? (
+            <p className="py-12 text-center text-sm text-muted-foreground">
+              No starred mods on this page. Turn off “Starred only”, run a search, or star items from cards or
+              detail.
+            </p>
+          ) : null}
+
+          {!catalogLoading && catalog && displayMods.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              {catalog.mods.map((m) => (
+              {displayMods.map((m) => (
                 <motion.div
                   key={m.modId}
                   layout
@@ -467,6 +607,54 @@ export function MarketplaceClient() {
                       {m.author ? (
                         <p className="mt-1 text-xs text-muted-foreground">by {m.author}</p>
                       ) : null}
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {stackSet.has(m.modId) ? (
+                          <Badge className="text-[10px] font-normal">In stack</Badge>
+                        ) : null}
+                        {isStarred(m.modId) ? (
+                          <Badge variant="outline" className="text-[10px] font-normal">
+                            Starred
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        title="Copy workshop link"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(m.sourceUrl);
+                          toast.success("Copied workshop link");
+                        }}
+                      >
+                        <Link2 className="size-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        title={isStarred(m.modId) ? "Remove star" : "Star mod"}
+                        onClick={() => {
+                          const now = toggleStarred({
+                            modId: m.modId,
+                            name: m.name,
+                            sourceUrl: m.sourceUrl,
+                          });
+                          toast.message(now ? "Starred in this browser" : "Removed from starred");
+                          setLibraryTick((t) => t + 1);
+                        }}
+                      >
+                        <Star
+                          className={cn(
+                            "size-3.5",
+                            isStarred(m.modId) && "fill-amber-400 text-amber-400",
+                          )}
+                        />
+                      </Button>
                     </div>
                   </div>
                   {m.summary ? (
@@ -510,8 +698,8 @@ export function MarketplaceClient() {
             </div>
           ) : null}
 
-          {catalog && catalog.mods.length > 0 ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+          {catalog && catalog.totalCount > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -520,9 +708,32 @@ export function MarketplaceClient() {
               >
                 Previous
               </Button>
-              <span className="text-xs text-muted-foreground">
-                Page {page} / {totalPages}
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  Page {page} / {totalPages}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="page-jump" className="sr-only">
+                    Jump to page
+                  </Label>
+                  <Input
+                    id="page-jump"
+                    inputMode="numeric"
+                    placeholder="#"
+                    value={pageJump}
+                    onChange={(e) => setPageJump(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      const n = Number.parseInt(pageJump, 10);
+                      if (!Number.isFinite(n)) return;
+                      const next = Math.min(totalPages, Math.max(1, n));
+                      setPage(next);
+                      setPageJump("");
+                    }}
+                    className="h-8 w-12 rounded-lg px-1 text-center text-xs"
+                  />
+                </div>
+              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -541,6 +752,67 @@ export function MarketplaceClient() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
         >
+          <Card className="rounded-2xl border-border/80">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Library</CardTitle>
+              <CardDescription>Stored in this browser only (not synced to the server).</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <History className="size-3.5" />
+                  Recent
+                </p>
+                {recentEntries.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Open a mod detail to populate recents.</p>
+                ) : (
+                  <ul className="max-h-36 space-y-1 overflow-y-auto pr-1 text-sm">
+                    {recentEntries.map((r) => (
+                      <li key={r.modId}>
+                        <button
+                          type="button"
+                          className="w-full truncate rounded-md px-2 py-1 text-left text-xs hover:bg-muted/80"
+                          onClick={() => {
+                            setDetailId(r.modId);
+                            setDetailOpen(true);
+                          }}
+                        >
+                          {r.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <Star className="size-3.5" />
+                  Starred
+                </p>
+                {starredEntries.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Use the star icon on cards or in detail.</p>
+                ) : (
+                  <ul className="max-h-36 space-y-1 overflow-y-auto pr-1 text-sm">
+                    {starredEntries.map((s) => (
+                      <li key={s.modId}>
+                        <button
+                          type="button"
+                          className="w-full truncate rounded-md px-2 py-1 text-left text-xs hover:bg-muted/80"
+                          onClick={() => {
+                            setDetailId(s.modId);
+                            setDetailOpen(true);
+                          }}
+                        >
+                          {s.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="rounded-2xl border-border/80">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Server mod stack</CardTitle>
@@ -633,6 +905,7 @@ export function MarketplaceClient() {
         open={detailOpen}
         onOpenChange={setDetailOpen}
         onModIdChange={(id) => setDetailId(id)}
+        onModLoaded={handleModLoaded}
         onAdd={(mod) => {
           addMod(mod);
           setDetailOpen(false);

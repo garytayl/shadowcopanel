@@ -7,10 +7,15 @@ import {
   Image as ImageIcon,
   Info,
   Layers,
+  Link2,
   Loader2,
   Package,
+  Star,
   Tag,
 } from "lucide-react";
+import { toast } from "sonner";
+
+import { isStarred, toggleStarred } from "@/lib/marketplace/storage";
 
 import type { WorkshopCatalogMod } from "@/lib/workshop/types";
 import {
@@ -50,6 +55,8 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   /** Open another mod in the same dialog (e.g. dependency drill-down) */
   onModIdChange?: (id: string) => void;
+  /** Fires when full detail payload is loaded (e.g. track recents) */
+  onModLoaded?: (mod: WorkshopCatalogMod) => void;
   onAdd: (mod: WorkshopCatalogMod) => void;
   onAddWithDependencies: (mod: WorkshopCatalogMod) => void;
 };
@@ -59,12 +66,14 @@ export function ModDetailDialog({
   open,
   onOpenChange,
   onModIdChange,
+  onModLoaded,
   onAdd,
   onAddWithDependencies,
 }: Props) {
   const [mod, setMod] = useState<WorkshopCatalogMod | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [, setStarBump] = useState(0);
 
   useEffect(() => {
     if (!open || !modId) {
@@ -88,6 +97,7 @@ export function ModDetailDialog({
           return;
         }
         setMod(j.data);
+        onModLoaded?.(j.data);
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : String(e));
@@ -100,10 +110,11 @@ export function ModDetailDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, modId]);
+  }, [open, modId, onModLoaded]);
 
   const deps = mod?.dependencies ?? [];
   const canAddWithDeps = deps.length > 0;
+  const starred = mod ? isStarred(mod.modId) : false;
   const gallery = mod?.galleryUrls?.length
     ? mod.galleryUrls
     : mod?.imageUrl
@@ -122,6 +133,44 @@ export function ModDetailDialog({
               <span className="font-mono text-xs text-muted-foreground">{mod.modId}</span>
             ) : null}
           </DialogDescription>
+          {mod && !loading ? (
+            <div className="flex flex-wrap gap-2 pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void navigator.clipboard.writeText(mod.sourceUrl);
+                  toast.success("Copied workshop link");
+                }}
+              >
+                <Link2 className="mr-2 size-3.5" />
+                Copy link
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const now = toggleStarred({
+                    modId: mod.modId,
+                    name: mod.name,
+                    sourceUrl: mod.sourceUrl,
+                  });
+                  toast.message(now ? "Starred in this browser" : "Removed from starred");
+                  setStarBump((t) => t + 1);
+                }}
+              >
+                <Star
+                  className={cn(
+                    "mr-2 size-3.5",
+                    starred && "fill-amber-400 text-amber-400",
+                  )}
+                />
+                {starred ? "Starred" : "Star"}
+              </Button>
+            </div>
+          ) : null}
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-hidden">
