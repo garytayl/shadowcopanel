@@ -225,6 +225,33 @@ export function DashboardClient() {
     [loading, actionKey, st],
   );
 
+  const powerOrbDisabled =
+    !s?.configured || !!actionKey || phase === "loading" || phase === "unknown";
+
+  const powerOrbTitle =
+    phase === "running"
+      ? "Stop server"
+      : phase === "stopped"
+        ? "Start server"
+        : phase === "degraded"
+          ? "Restart server"
+          : undefined;
+
+  function handlePowerOrbClick() {
+    if (powerOrbDisabled || !s?.configured) return;
+    if (phase === "running") {
+      void run("stop", () => actionStopServer() as Promise<{ ok: boolean; error?: string }>);
+      return;
+    }
+    if (phase === "stopped") {
+      void run("start", () => actionStartServer() as Promise<{ ok: boolean; error?: string }>);
+      return;
+    }
+    if (phase === "degraded") {
+      void run("restart", () => actionRestartServer() as Promise<{ ok: boolean; error?: string }>);
+    }
+  }
+
   const serverTitle = useMemo(() => {
     const note = s?.instanceNotes?.trim();
     if (note) return note.split(/\r?\n/)[0]!.slice(0, 48) || "Server";
@@ -314,7 +341,12 @@ export function DashboardClient() {
         </div>
 
         <div className="mt-6 flex flex-col items-center gap-2 border-t border-border/50 pt-6 md:mt-8 md:pt-8">
-          <PowerOrb phase={phase} />
+          <PowerOrb
+            phase={phase}
+            disabled={powerOrbDisabled}
+            title={powerOrbTitle}
+            onClick={handlePowerOrbClick}
+          />
           <p className="max-w-md text-center text-[11px] text-muted-foreground">
             {s?.configured ? `${s.user}@${s.host}` : "Configure SSH in Settings"}
           </p>
