@@ -6,9 +6,11 @@ import {
   Activity,
   ClipboardCopy,
   Cpu,
+  Download,
   EthernetPort,
   HardDrive,
   Loader2,
+  Megaphone,
   Network,
   Play,
   Power,
@@ -29,6 +31,7 @@ import {
   fetchDashboardSnapshot,
   type DashboardSnapshot,
 } from "@/lib/actions/dashboard";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +43,7 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 
 function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
   return (
@@ -50,6 +54,24 @@ function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
 }
 
 const AUTO_REFRESH_KEY = "reforger-dashboard-auto-refresh";
+const STICKY_NOTES_KEY = "reforger-dashboard-sticky-notes";
+
+function safeDashboardExport(snap: DashboardSnapshot) {
+  const settings = { ...snap.settings };
+  delete settings.privateKeyPath;
+  return {
+    exportedAt: new Date().toISOString(),
+    exportKind: "reforger-control-panel-dashboard",
+    settings: {
+      ...settings,
+      privateKeyPath: null,
+    },
+    status: snap.status,
+    ports: snap.ports,
+    health: snap.health,
+    system: snap.system,
+  };
+}
 
 export function DashboardClient() {
   const [snap, setSnap] = useState<DashboardSnapshot | null>(null);
@@ -57,6 +79,7 @@ export function DashboardClient() {
   const [actionKey, setActionKey] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [stickyNotes, setStickyNotes] = useState("");
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -83,7 +106,20 @@ export function DashboardClient() {
     } catch {
       /* ignore */
     }
+    try {
+      setStickyNotes(localStorage.getItem(STICKY_NOTES_KEY) ?? "");
+    } catch {
+      /* ignore */
+    }
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STICKY_NOTES_KEY, stickyNotes);
+    } catch {
+      /* ignore */
+    }
+  }, [stickyNotes]);
 
   useEffect(() => {
     try {
@@ -134,6 +170,29 @@ export function DashboardClient() {
             )}
             Refresh
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (!snap) {
+                toast.error("Nothing to export yet");
+                return;
+              }
+              const json = JSON.stringify(safeDashboardExport(snap), null, 2);
+              const blob = new Blob([json], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `reforger-dashboard-${Date.now()}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              toast.success("Downloaded safe snapshot");
+            }}
+            disabled={loading || !snap}
+          >
+            <Download className="mr-2 size-4" />
+            Export snapshot
+          </Button>
           <div className="flex items-center gap-2 rounded-xl border border-border/80 px-3 py-1.5">
             <Switch
               id="auto-refresh"
@@ -151,6 +210,14 @@ export function DashboardClient() {
           </p>
         ) : null}
       </div>
+
+      {s?.announcement ? (
+        <Alert className="rounded-2xl border-amber-500/35 bg-amber-500/[0.07]">
+          <Megaphone className="size-4 text-amber-600 dark:text-amber-400" aria-hidden />
+          <AlertTitle className="text-foreground">Announcement</AlertTitle>
+          <AlertDescription className="text-muted-foreground">{s.announcement}</AlertDescription>
+        </Alert>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <motion.div
@@ -279,10 +346,28 @@ export function DashboardClient() {
           <Card className="rounded-2xl border-border/80">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Your notes</CardTitle>
-              <CardDescription>Optional reminder (set in hosting settings)</CardDescription>
+              <CardDescription>
+                Hosting note (env) + sticky pad (saved in this browser only)
+              </CardDescription>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              {s?.instanceNotes ? s.instanceNotes : "—"}
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <div>
+                <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground/90">
+                  From settings
+                </p>
+                <p>{s?.instanceNotes ? s.instanceNotes : "—"}</p>
+              </div>
+              <div>
+                <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground/90">
+                  Sticky pad
+                </p>
+                <Textarea
+                  placeholder="Passwords for teammates, next map rotation, etc."
+                  value={stickyNotes}
+                  onChange={(e) => setStickyNotes(e.target.value)}
+                  className="min-h-[88px] resize-y rounded-xl text-sm"
+                />
+              </div>
             </CardContent>
           </Card>
         </motion.div>

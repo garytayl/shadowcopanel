@@ -194,6 +194,29 @@ export async function getSystemSnapshot(): Promise<SystemSnapshot> {
   return { uname, uptime, diskRoot, loadavg, tmuxSessions };
 }
 
+export async function getDiskReportFull(): Promise<string> {
+  const r = await sshExec("df -h 2>/dev/null || true");
+  return r.stdout.trim() || r.stderr.trim();
+}
+
+export async function getProcessSample(): Promise<string> {
+  const r = await sshExec(
+    "ps aux --sort=-%mem 2>/dev/null | head -35 || ps aux 2>/dev/null | head -35 || true",
+  );
+  return r.stdout.trim() || r.stderr.trim();
+}
+
+export async function getSocketSummary(): Promise<string> {
+  const r = await sshExec("ss -s 2>/dev/null || true");
+  return r.stdout.trim() || r.stderr.trim();
+}
+
+/** Quick outbound connectivity check from the game server (ICMP may be blocked by some clouds). */
+export async function getPingExternal(): Promise<string> {
+  const r = await sshExec("ping -c 2 -W 4 8.8.8.8 2>&1 || true");
+  return (r.stdout + r.stderr).trim();
+}
+
 export async function getRecentLogs(lines = 400): Promise<string> {
   const env = requireServerEnv();
   const glob = env.REFORGER_LOG_GLOB;

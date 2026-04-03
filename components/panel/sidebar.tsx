@@ -12,6 +12,8 @@ import {
   Settings,
   Menu,
   Stethoscope,
+  Wrench,
+  CircleHelp,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -31,6 +33,8 @@ const links = [
   { href: "/mods", label: "Mods", icon: Package },
   { href: "/logs", label: "Logs", icon: ScrollText },
   { href: "/diagnostics", label: "Diagnostics", icon: Stethoscope },
+  { href: "/tools", label: "Tools", icon: Wrench },
+  { href: "/help", label: "Help", icon: CircleHelp },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
@@ -96,7 +100,7 @@ export function Sidebar() {
         </div>
         <NavList />
         <div className="px-4 py-3 text-[10px] leading-snug text-muted-foreground">
-          <span className="block uppercase tracking-wider">v0.2</span>
+          <span className="block uppercase tracking-wider">v0.3</span>
           <span className="mt-1 block normal-case">Cloud server control</span>
         </div>
       </aside>

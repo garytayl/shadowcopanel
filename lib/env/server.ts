@@ -94,10 +94,13 @@ export type PublicServerSettings = {
   serverCommand: string;
   instanceNotes: string;
   logGlob: string | null;
+  /** Optional banner text for all users (set in hosting env) */
+  announcement: string | null;
 };
 
 export function getPublicServerSettings(): PublicServerSettings {
   const e = tryGetServerEnv();
+  const announcement = env("REFORGER_ANNOUNCEMENT")?.trim() || null;
   if (!e) {
     return {
       configured: false,
@@ -112,6 +115,7 @@ export function getPublicServerSettings(): PublicServerSettings {
       serverCommand: './ArmaReforgerServer -config ./config.json -maxFPS 60',
       instanceNotes: "",
       logGlob: null,
+      announcement,
     };
   }
   return {
@@ -129,5 +133,6 @@ export function getPublicServerSettings(): PublicServerSettings {
     serverCommand: e.REFORGER_SERVER_CMD,
     instanceNotes: e.REFORGER_INSTANCE_NOTES,
     logGlob: e.REFORGER_LOG_GLOB ?? null,
+    announcement,
   };
 }
