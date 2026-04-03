@@ -7,6 +7,7 @@ import {
   getListeningPorts,
   getRecentLogs,
   getServerRuntimeStatus,
+  getSystemSnapshot,
   restartServer,
   startServer,
   stopServer,
@@ -18,6 +19,7 @@ export type DashboardSnapshot = {
   status: Awaited<ReturnType<typeof getServerRuntimeStatus>>;
   ports: { stdout: string };
   health: { free: string; pgrep: string };
+  system: Awaited<ReturnType<typeof getSystemSnapshot>>;
 };
 
 export async function fetchDashboardSnapshot(): Promise<
@@ -30,11 +32,13 @@ export async function fetchDashboardSnapshot(): Promise<
     const status = await getServerRuntimeStatus();
     const ports = await getListeningPorts();
     const health = await getHealthSnapshot();
+    const system = await getSystemSnapshot();
     return ok({
       settings,
       status,
       ports: { stdout: ports.stdout },
       health,
+      system,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

@@ -1,5 +1,7 @@
 import { PageHeader } from "@/components/panel/page-header";
 import { getPublicServerSettings } from "@/lib/env/server";
+
+export const runtime = "nodejs";
 import {
   Card,
   CardContent,
@@ -91,9 +93,40 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
             {s.configured ? (
-              <p>SSH credentials appear configured. Restart <code className="text-xs">next dev</code> after editing <code className="text-xs">.env.local</code>.</p>
+              <p>
+                SSH env looks good on the server. For local dev, restart{" "}
+                <code className="text-xs">next dev</code> after editing{" "}
+                <code className="text-xs">.env.local</code>.
+              </p>
             ) : (
-              <p>Copy <code className="text-xs">.env.example</code> to <code className="text-xs">.env.local</code> and set host, user, and a private key.</p>
+              <div className="space-y-2">
+                <p>
+                  The server does not see all required SSH variables:{" "}
+                  <code className="text-xs">REFORGER_SSH_HOST</code>,{" "}
+                  <code className="text-xs">REFORGER_SSH_USER</code>, and either{" "}
+                  <code className="text-xs">REFORGER_SSH_PRIVATE_KEY_PATH</code> or{" "}
+                  <code className="text-xs">REFORGER_SSH_PRIVATE_KEY</code>.
+                </p>
+                <p className="font-medium text-foreground">On Vercel</p>
+                <ul className="list-inside list-disc space-y-1">
+                  <li>
+                    Names must match exactly (including the <code className="text-xs">REFORGER_</code> prefix).
+                  </li>
+                  <li>
+                    Enable each variable for <strong>Production</strong> (and Preview if you use preview URLs).
+                  </li>
+                  <li>
+                    After adding or changing secrets, trigger a new <strong>Redeploy</strong> — env is applied on deploy.
+                  </li>
+                  <li>
+                    Use <code className="text-xs">REFORGER_SSH_PRIVATE_KEY</code> with the full PEM pasted in; leave path empty.
+                  </li>
+                </ul>
+                <p className="font-medium text-foreground">Local dev</p>
+                <p>
+                  Copy <code className="text-xs">.env.example</code> to <code className="text-xs">.env.local</code> and set the same variables.
+                </p>
+              </div>
             )}
           </CardContent>
         </Card>

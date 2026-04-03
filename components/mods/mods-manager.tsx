@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import {
   ArrowDown,
   ArrowUp,
+  FileDown,
   Loader2,
   Plus,
   Save,
@@ -17,6 +18,7 @@ import {
   saveModsAction,
   type ModRowPayload,
 } from "@/lib/actions/mods";
+import { downloadTextFile } from "@/lib/utils/download";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -136,6 +138,21 @@ export function ModsManager() {
         >
           <Plus className="mr-2 size-4" />
           Add mod
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={saving}
+          onClick={() => {
+            downloadTextFile(
+              `reforger-mods-${new Date().toISOString().slice(0, 10)}.json`,
+              jsonPreview,
+              "application/json;charset=utf-8",
+            );
+          }}
+        >
+          <FileDown className="mr-2 size-4" />
+          Export JSON
         </Button>
         <Button onClick={() => void save()} disabled={saving || loading}>
           {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}

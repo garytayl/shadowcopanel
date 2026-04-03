@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Filter, Loader2, RefreshCw } from "lucide-react";
+import { Download, Filter, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { fetchLogsAction, type LogHealthSummary } from "@/lib/actions/logs";
+import { downloadTextFile } from "@/lib/utils/download";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -81,6 +82,21 @@ export function LogsViewer() {
         <Button onClick={() => void refresh()} disabled={loading} variant="outline" size="sm">
           {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
           Refresh logs
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            const body = displayLines.join("\n");
+            downloadTextFile(
+              `reforger-logs-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`,
+              body,
+            );
+          }}
+        >
+          <Download className="mr-2 size-4" />
+          Download view
         </Button>
         <div className="relative min-w-[200px] flex-1 max-w-md">
           <Input

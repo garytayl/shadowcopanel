@@ -75,3 +75,19 @@ export async function validateJsonAction(
     return err(e instanceof Error ? e.message : String(e));
   }
 }
+
+export async function exportRemoteConfigAction(): Promise<
+  ApiResult<{ content: string; filename: string }>
+> {
+  const g = ensureConfigured();
+  if (g !== true) return g;
+  try {
+    const raw = await getRemoteConfigText();
+    const p = parseConfigJson(raw);
+    if (!p.ok) return err(p.error);
+    const filename = `reforger-config-${new Date().toISOString().slice(0, 10)}.json`;
+    return ok({ content: stringifyConfig(p.value), filename });
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}

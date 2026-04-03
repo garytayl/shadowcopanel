@@ -1,5 +1,15 @@
 import "server-only";
 
+import { unstable_noStore as noStore } from "next/cache";
+
+/**
+ * Read env at request time. Bracket access + noStore() avoids stale/empty values on
+ * Vercel when RSC caches or build-time inlining would otherwise hide runtime secrets.
+ */
+function env(name: string): string | undefined {
+  return process.env[name];
+}
+
 export type ServerEnv = {
   REFORGER_SSH_HOST: string;
   REFORGER_SSH_PORT: number;
@@ -27,10 +37,11 @@ function str(v: string | undefined, fallback: string): string {
 
 /** Returns null if SSH is not fully configured (e.g. local dev without .env.local). */
 export function tryGetServerEnv(): ServerEnv | null {
-  const host = process.env.REFORGER_SSH_HOST?.trim();
-  const user = process.env.REFORGER_SSH_USER?.trim();
-  const keyPath = process.env.REFORGER_SSH_PRIVATE_KEY_PATH?.trim();
-  const keyInline = process.env.REFORGER_SSH_PRIVATE_KEY?.trim();
+  noStore();
+  const host = env("REFORGER_SSH_HOST")?.trim();
+  const user = env("REFORGER_SSH_USER")?.trim();
+  const keyPath = env("REFORGER_SSH_PRIVATE_KEY_PATH")?.trim();
+  const keyInline = env("REFORGER_SSH_PRIVATE_KEY")?.trim();
 
   if (!host || !user || (!keyPath && !keyInline)) {
     return null;
@@ -38,25 +49,25 @@ export function tryGetServerEnv(): ServerEnv | null {
 
   return {
     REFORGER_SSH_HOST: host,
-    REFORGER_SSH_PORT: num(process.env.REFORGER_SSH_PORT, 22),
+    REFORGER_SSH_PORT: num(env("REFORGER_SSH_PORT"), 22),
     REFORGER_SSH_USER: user,
     REFORGER_SSH_PRIVATE_KEY_PATH: keyPath || undefined,
     REFORGER_SSH_PRIVATE_KEY: keyInline || undefined,
     REFORGER_SERVER_PATH: str(
-      process.env.REFORGER_SERVER_PATH,
+      env("REFORGER_SERVER_PATH"),
       "/home/ubuntu/arma-reforger",
     ),
     REFORGER_CONFIG_PATH: str(
-      process.env.REFORGER_CONFIG_PATH,
+      env("REFORGER_CONFIG_PATH"),
       "/home/ubuntu/arma-reforger/config.json",
     ),
-    REFORGER_TMUX_SESSION: str(process.env.REFORGER_TMUX_SESSION, "reforger"),
+    REFORGER_TMUX_SESSION: str(env("REFORGER_TMUX_SESSION"), "reforger"),
     REFORGER_SERVER_CMD: str(
-      process.env.REFORGER_SERVER_CMD,
+      env("REFORGER_SERVER_CMD"),
       './ArmaReforgerServer -config ./config.json -maxFPS 60',
     ),
-    REFORGER_INSTANCE_NOTES: str(process.env.REFORGER_INSTANCE_NOTES, ""),
-    REFORGER_LOG_GLOB: process.env.REFORGER_LOG_GLOB?.trim() || undefined,
+    REFORGER_INSTANCE_NOTES: str(env("REFORGER_INSTANCE_NOTES"), ""),
+    REFORGER_LOG_GLOB: env("REFORGER_LOG_GLOB")?.trim() || undefined,
   };
 }
 

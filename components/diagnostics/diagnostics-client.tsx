@@ -1,0 +1,143 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { Activity, Loader2, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
+
+import { fetchDiagnosticsAction } from "@/lib/actions/diagnostics";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+
+export function DiagnosticsClient() {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<Awaited<
+    ReturnType<typeof fetchDiagnosticsAction>
+  > | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const r = await fetchDiagnosticsAction();
+    setLoading(false);
+    setData(r);
+    if (!r.ok) {
+      toast.error(r.error);
+    }
+  }, []);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => void refresh(), 0);
+    return () => window.clearTimeout(t);
+  }, [refresh]);
+
+  const d = data?.ok ? data.data : null;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
+          {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
+          Refresh
+        </Button>
+      </div>
+
+      {d?.ping ? (
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
+          <Card className="rounded-2xl border-border/80">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Activity className="size-4" />
+                SSH ping
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap items-center gap-2 text-sm">
+              {d.ping.ok ? (
+                <>
+                  <Badge variant="default">Reachable</Badge>
+                  <span className="text-muted-foreground">{d.ping.latencyMs} ms</span>
+                </>
+              ) : (
+                <>
+                  <Badge variant="destructive">Failed</Badge>
+                  <span className="text-destructive">{d.ping.message}</span>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      ) : null}
+
+      {d?.system ? (
+        <Card className="rounded-2xl border-border/80">
+          <CardHeader>
+            <CardTitle className="text-base">Remote system</CardTitle>
+            <CardDescription>uname, uptime, root filesystem, load average, tmux</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <div>
+              <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Kernel</p>
+              <pre className="max-h-32 overflow-auto rounded-lg bg-muted/50 p-3 font-mono text-[11px] leading-relaxed">
+                {d.system.uname}
+              </pre>
+            </div>
+            <div>
+              <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Uptime</p>
+              <pre className="rounded-lg bg-muted/50 p-3 font-mono text-[11px]">{d.system.uptime}</pre>
+            </div>
+            <div>
+              <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Disk /</p>
+              <pre className="rounded-lg bg-muted/50 p-3 font-mono text-[11px]">{d.system.diskRoot}</pre>
+            </div>
+            <div>
+              <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Load</p>
+              <pre className="rounded-lg bg-muted/50 p-3 font-mono text-[11px]">{d.system.loadavg}</pre>
+            </div>
+            <div className="md:col-span-2">
+              <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">tmux</p>
+              <pre className="max-h-24 overflow-auto rounded-lg bg-muted/50 p-3 font-mono text-[11px]">
+                {d.system.tmuxSessions}
+              </pre>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {d?.health ? (
+        <Card className="rounded-2xl border-border/80">
+          <CardHeader>
+            <CardTitle className="text-base">Memory &amp; process</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <pre className="max-h-48 overflow-auto rounded-xl bg-muted/50 p-4 font-mono text-[11px]">
+              {d.health.free}
+            </pre>
+            <pre className="max-h-48 overflow-auto rounded-xl bg-muted/50 p-4 font-mono text-[11px]">
+              {d.health.pgrep || "(none)"}
+            </pre>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {d?.portsSample ? (
+        <Card className="rounded-2xl border-border/80">
+          <CardHeader>
+            <CardTitle className="text-base">Listening sockets (sample)</CardTitle>
+            <CardDescription>From <code className="text-xs">ss</code> + configured port filter on dashboard</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <pre className="max-h-64 overflow-auto rounded-xl bg-muted/50 p-4 font-mono text-[11px] leading-relaxed">
+              {d.portsSample || "—"}
+            </pre>
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
+  );
+}

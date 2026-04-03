@@ -71,15 +71,27 @@ You are not “hosting” the PEM on a website — the browser never sees it. On
 
 **EC2 security group:** SSH (port 22) must allow the **outbound IP** of whatever runs Next.js. Vercel’s egress IPs are not a single static address you can paste in “My IP,” so many people either (a) restrict `22` to a bastion/VPN/tailnet and run the panel only there, (b) use a non-Vercel host with a known IP, or (c) accept wider exposure and rely on key-only auth (still risky without app-level login). Plan this before exposing the panel.
 
-## Features (v1)
+### “Timed out while waiting for handshake”
+
+That almost always means **the TCP path to port 22 never completed the SSH handshake** — most commonly **AWS is dropping or not routing SSH** from where your app runs.
+
+1. **EC2 → Security groups → Inbound rules:** allow **SSH (22)** from **0.0.0.0/0** (testing) or from a range that includes your client. If the rule only allows **your home IP**, **Vercel will fail** because its servers use different egress addresses.
+2. Confirm the instance has a **public IP** (or you’re using a bastion that matches your architecture).
+3. **NACLs** and **instance firewall** (`ufw`) must also allow 22 if you use them.
+4. From your **Mac** (same key): `ssh -i ~/.ssh/your.pem ubuntu@YOUR_IP` — if that works but Vercel does not, it’s almost certainly **SG source IP** vs **Vercel**.
+
+## Features (v0.2)
 
 | Area        | Behavior |
 |------------|----------|
-| **Dashboard** | SSH reachability, tmux/process heuristics, EC2 target, ports (`ss`), memory/process snippets, quick actions (start/stop/restart, health, ports, logs). |
-| **Config**    | Load/save `config.json` over SFTP; form fields + raw JSON editor. |
-| **Mods**      | Table with reorder, enable toggle, JSON preview; saves `mods` array to remote config. |
-| **Logs**      | Tails discovered logs (or `REFORGER_LOG_GLOB`), search + filters, simple health hints. |
-| **Settings**  | Read-only view of non-secret env-derived settings. |
+| **Dashboard** | SSH reachability, tmux/process heuristics, EC2 target (copy **user@host**), **remote system** snapshot (kernel, uptime, disk, load, tmux), ports (`ss`), memory/process, **auto-refresh every 30s**, quick actions (start/stop/restart, health, ports, logs). |
+| **Config**    | Load/save `config.json` over SFTP; form + raw JSON; **download JSON backup**. |
+| **Mods**      | Table with reorder, enable toggle, JSON preview; **export mods JSON**; save to remote config. |
+| **Logs**      | Tail logs, search + filters, health hints; **download current view** as `.txt`. |
+| **Diagnostics** | Dedicated page: SSH ping, full system snapshot, memory/pgrep, socket sample. |
+| **Settings**  | Read-only env-derived settings (Vercel troubleshooting). |
+| **Theme**     | Light/dark toggle (sidebar / mobile header). |
+| **API**       | `GET /api/health` — JSON for uptime monitors (`sshConfigured`, `sshReachable`, `latencyMs`). |
 
 ## Remote server assumptions
 

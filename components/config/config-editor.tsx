@@ -2,10 +2,16 @@
 
 import { useCallback, useState } from "react";
 import { motion } from "framer-motion";
-import { Loader2, Save, Download } from "lucide-react";
+import { FileDown, Loader2, Save, Download } from "lucide-react";
 import { toast } from "sonner";
 
-import { loadRemoteConfigAction, saveRawConfigAction, saveRemoteConfigAction } from "@/lib/actions/config";
+import {
+  exportRemoteConfigAction,
+  loadRemoteConfigAction,
+  saveRawConfigAction,
+  saveRemoteConfigAction,
+} from "@/lib/actions/config";
+import { downloadTextFile } from "@/lib/utils/download";
 import {
   configToFormValues,
   defaultFormValues,
@@ -101,6 +107,18 @@ export function ConfigEditor() {
     await load();
   };
 
+  const downloadExport = async () => {
+    setSaving(true);
+    const r = await exportRemoteConfigAction();
+    setSaving(false);
+    if (!r.ok) {
+      toast.error(r.error);
+      return;
+    }
+    downloadTextFile(r.data.filename, r.data.content, "application/json;charset=utf-8");
+    toast.success("Download started");
+  };
+
   const applyRawToForm = () => {
     try {
       const p = JSON.parse(raw) as ReforgerConfig;
@@ -129,6 +147,10 @@ export function ConfigEditor() {
         <Button onClick={() => void load()} disabled={loading || saving}>
           {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Download className="mr-2 size-4" />}
           Load from server
+        </Button>
+        <Button type="button" variant="outline" onClick={() => void downloadExport()} disabled={saving}>
+          {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <FileDown className="mr-2 size-4" />}
+          Download JSON backup
         </Button>
       </div>
 

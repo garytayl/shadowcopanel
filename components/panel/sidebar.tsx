@@ -11,9 +11,11 @@ import {
   ScrollText,
   Settings,
   Menu,
+  Stethoscope,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/panel/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -28,6 +30,7 @@ const links = [
   { href: "/config", label: "Config", icon: FileJson },
   { href: "/mods", label: "Mods", icon: Package },
   { href: "/logs", label: "Logs", icon: ScrollText },
+  { href: "/diagnostics", label: "Diagnostics", icon: Stethoscope },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
@@ -81,24 +84,28 @@ export function Sidebar() {
   return (
     <>
       <aside className="hidden w-56 shrink-0 border-r border-border/60 bg-sidebar lg:block">
-        <div className="flex h-14 items-center border-b border-border/60 px-4">
+        <div className="flex h-14 items-center justify-between gap-2 border-b border-border/60 px-3">
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="font-semibold tracking-tight"
+            className="min-w-0 truncate font-semibold tracking-tight"
           >
             Reforger Control
           </motion.div>
+          <ThemeToggle />
         </div>
         <NavList />
         <div className="px-4 py-3 text-[10px] uppercase tracking-wider text-muted-foreground">
-          v1 · EC2 / SSH
+          v0.2 · EC2 / SSH
         </div>
       </aside>
 
-      <div className="flex h-14 items-center border-b border-border/60 px-4 lg:hidden">
-        <MobileNav />
-        <span className="ml-2 font-semibold tracking-tight">Reforger Control</span>
+      <div className="flex h-14 items-center justify-between border-b border-border/60 px-2 lg:hidden">
+        <div className="flex min-w-0 items-center gap-1">
+          <MobileNav />
+          <span className="truncate font-semibold tracking-tight">Reforger Control</span>
+        </div>
+        <ThemeToggle />
       </div>
     </>
   );

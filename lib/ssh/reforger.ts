@@ -171,6 +171,29 @@ export async function saveRemoteConfigFromForm(
 
 export { configToFormValues, applyFormToConfig };
 
+const SYS_SPLIT = "<<<REFORGER_SYS_SPLIT>>>";
+
+export type SystemSnapshot = {
+  uname: string;
+  uptime: string;
+  diskRoot: string;
+  loadavg: string;
+  tmuxSessions: string;
+};
+
+/** One SSH round-trip: kernel, uptime, root disk, load, tmux list */
+export async function getSystemSnapshot(): Promise<SystemSnapshot> {
+  const r = await sshExec(
+    `uname -a; echo "${SYS_SPLIT}"; uptime -p 2>/dev/null || uptime 2>/dev/null || true; echo "${SYS_SPLIT}"; df -h / 2>/dev/null | tail -1 || true; echo "${SYS_SPLIT}"; cat /proc/loadavg 2>/dev/null || echo n/a; echo "${SYS_SPLIT}"; tmux list-sessions 2>/dev/null | tr '\\n' ' ' || echo "(no tmux sessions)"`,
+  );
+  const parts = r.stdout
+    .split(SYS_SPLIT)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const [uname = "", uptime = "", diskRoot = "", loadavg = "", tmuxSessions = ""] = parts;
+  return { uname, uptime, diskRoot, loadavg, tmuxSessions };
+}
+
 export async function getRecentLogs(lines = 400): Promise<string> {
   const env = requireServerEnv();
   const glob = env.REFORGER_LOG_GLOB;

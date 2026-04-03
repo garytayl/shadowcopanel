@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { Client } from "ssh2";
 
 import { requireServerEnv } from "@/lib/env/server";
+import { describeSshFailure } from "@/lib/ssh/errors";
 
 export type ExecResult = {
   code: number | null;
@@ -29,10 +30,18 @@ function connectClient(): Promise<Client> {
 
   return new Promise((resolve, reject) => {
     const client = new Client();
+    // Allow slow networks; handshake timeout is controlled by readyTimeout below.
+    const outerMs = 55_000;
     const timer = setTimeout(() => {
       client.end();
-      reject(new Error("SSH connection timed out (15s)"));
-    }, 15_000);
+      reject(
+        new Error(
+          describeSshFailure(
+            `SSH connection timed out (${outerMs / 1000}s) before session was ready.`,
+          ),
+        ),
+      );
+    }, outerMs);
 
     client
       .on("ready", () => {
@@ -41,14 +50,17 @@ function connectClient(): Promise<Client> {
       })
       .on("error", (e: Error) => {
         clearTimeout(timer);
-        reject(e);
+        reject(new Error(describeSshFailure(e.message)));
       })
       .connect({
         host: env.REFORGER_SSH_HOST,
         port: env.REFORGER_SSH_PORT,
         username: env.REFORGER_SSH_USER,
         privateKey,
-        readyTimeout: 12_000,
+        // Default ssh2 is 20s; Vercel → EC2 can be slow if SG/NACL delays packets.
+        readyTimeout: 45_000,
+        keepaliveInterval: 10_000,
+        keepaliveCountMax: 3,
       });
   });
 }
@@ -153,7 +165,7 @@ export async function sshPing(): Promise<
     }
     return { ok: true, latencyMs };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, message: msg };
+    const raw = e instanceof Error ? e.message : String(e);
+    return { ok: false, message: describeSshFailure(raw) };
   }
 }
