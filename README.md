@@ -59,6 +59,18 @@ npm start
 
 Run `npm start` on a host that has outbound SSH to EC2 and the key file path configured.
 
+### Mac vs PC vs Vercel (where the PEM lives)
+
+You are not “hosting” the PEM on a website — the browser never sees it. Only the **Node server** reads it.
+
+| Environment | What to do |
+|-------------|------------|
+| **MacBook (local dev)** | Copy `arma-key.pem` to something like `~/.ssh/arma-reforger.pem`, `chmod 600`, set `REFORGER_SSH_PRIVATE_KEY_PATH` to that path. Avoid `Downloads/` long-term. |
+| **BigEp PC** | Same idea: a fixed path under your user profile, not the repo. |
+| **Vercel** | Add **`REFORGER_SSH_PRIVATE_KEY`** in **Project → Settings → Environment Variables** (paste the full key; mark as sensitive). Leave **`REFORGER_SSH_PRIVATE_KEY_PATH` empty**. There is no reliable file path in serverless. |
+
+**EC2 security group:** SSH (port 22) must allow the **outbound IP** of whatever runs Next.js. Vercel’s egress IPs are not a single static address you can paste in “My IP,” so many people either (a) restrict `22` to a bastion/VPN/tailnet and run the panel only there, (b) use a non-Vercel host with a known IP, or (c) accept wider exposure and rely on key-only auth (still risky without app-level login). Plan this before exposing the panel.
+
 ## Features (v1)
 
 | Area        | Behavior |
