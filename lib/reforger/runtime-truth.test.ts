@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import { analyzeReforgerLogs } from "@/lib/reforger/log-analysis";
 import type { HealthScoreResult } from "@/lib/reforger/health-score";
 import {
+  detectCrashInLogTail,
   evaluateRuntimeTruth,
   mergeHealthScoreWithRuntimeTruth,
+  parseLogA2sFailure,
   parseLogAdvertisedRegistration,
 } from "@/lib/reforger/runtime-truth";
 
@@ -64,6 +66,7 @@ describe("evaluateRuntimeTruth", () => {
     expect(r.joinability).toBe("not_joinable");
     expect(r.startupState).toBe("degraded");
     expect(r.advertisedAddress).toBe("0.0.0.0:2001");
+    expect(r.a2sStatus).toBe("ok");
     expect(r.findings.find((f) => f.key === "log_registration")?.status).toBe("fail");
   });
 
@@ -76,6 +79,7 @@ describe("evaluateRuntimeTruth", () => {
     });
     expect(r.joinability).toBe("likely_joinable");
     expect(r.startupState).toBe("running");
+    expect(r.a2sStatus).toBe("ok");
     expect(r.findings.find((f) => f.key === "log_registration")?.status).toBe("pass");
   });
 
@@ -86,6 +90,44 @@ describe("evaluateRuntimeTruth", () => {
     });
     expect(r.startupState).toBe("failed");
     expect(r.joinability).toBe("not_joinable");
+    expect(r.a2sStatus).toBe("unknown");
+  });
+
+  it("marks degraded when A2S init failed in logs even if UDP 17777 appears bound", () => {
+    const tail = `BACKEND      : Server registered with address: 203.0.113.1:2001
+BACKEND   (W): [A2S] Init failed... A2S is now turned off.`;
+    const r = evaluateRuntimeTruth({
+      ...healthyBase,
+      logTail: tail,
+      logAnalysis: analyzeReforgerLogs(tail),
+    });
+    expect(r.a2sStatus).toBe("failed");
+    expect(r.startupState).toBe("degraded");
+    expect(r.joinability).not.toBe("likely_joinable");
+  });
+
+  it("marks crashed when process is gone and log shows heap corruption", () => {
+    const tail = "double free or corruption (out)";
+    const r = evaluateRuntimeTruth({
+      ...healthyBase,
+      processRunning: false,
+      tmuxActive: true,
+      serverLikelyUp: false,
+      logTail: tail,
+      logAnalysis: analyzeReforgerLogs(tail),
+    });
+    expect(r.startupState).toBe("crashed");
+    expect(r.joinability).toBe("not_joinable");
+  });
+});
+
+describe("detectCrashInLogTail / parseLogA2sFailure", () => {
+  it("detects double free / corruption", () => {
+    expect(detectCrashInLogTail("double free or corruption (out)")).toBe(true);
+  });
+
+  it("detects A2S failure line", () => {
+    expect(parseLogA2sFailure("[A2S] Init failed — A2S is now turned off.")).toBe(true);
   });
 });
 
@@ -122,5 +164,17 @@ describe("mergeHealthScoreWithRuntimeTruth", () => {
     const merged = mergeHealthScoreWithRuntimeTruth(baseHealth, truth);
     expect(merged.score).toBe(92);
     expect(merged.status).toBe("Healthy");
+  });
+
+  it("caps score when A2S failed but registration is ok", () => {
+    const tail = "[A2S] Init failed. A2S is now turned off.";
+    const truth = evaluateRuntimeTruth({
+      ...healthyBase,
+      logTail: `Server registered with address: 203.0.113.1:2001\n${tail}`,
+      logAnalysis: analyzeReforgerLogs(tail),
+    });
+    const merged = mergeHealthScoreWithRuntimeTruth(baseHealth, truth);
+    expect(merged.score).toBeLessThanOrEqual(59);
+    expect(merged.penalties.some((p) => p.includes("A2S"))).toBe(true);
   });
 });

@@ -84,7 +84,11 @@ function hasReadyHint(tail: string): boolean {
 }
 
 function logFatalOrStartupFailure(logAnalysis: LogAnalysisResult | null, tail: string): boolean {
-  if (!logAnalysis) return /\b(unable to initialize|initialization failed|fatal|FATAL|segfault|SIGSEGV)\b/i.test(tail);
+  if (!logAnalysis) {
+    return /\b(unable to initialize|initialization failed|fatal|FATAL|segfault|SIGSEGV|double free|corruption\s*\(|glibc detected)\b/i.test(
+      tail,
+    );
+  }
   if (logAnalysis.summary.hasFatal) return true;
   const hi = logAnalysis.summary.highestSeverity;
   if (hi === "critical") return true;
@@ -99,6 +103,7 @@ function logFatalOrStartupFailure(logAnalysis: LogAnalysisResult | null, tail: s
       "init-failed",
       "assert-fail",
       "disk-full",
+      "heap-corruption",
     ]);
     return logAnalysis.issues.some((i) => fatalKeys.has(i.key));
   }
@@ -285,9 +290,15 @@ export function deriveHeroRuntimeVisual(
     if (rs.title === "Not joinable") {
       return { headline: "NOT JOINABLE", subline: rs.message, tone: "amber" };
     }
+    if (rs.title === "Degraded runtime") {
+      return { headline: "DEGRADED", subline: rs.message, tone: "amber" };
+    }
     return { headline: "RUNNING", subline: rs.message, tone: "amber" };
   }
   if (rs.state === "failed") {
+    if (rs.title === "Server crashed") {
+      return { headline: "CRASHED", subline: rs.message, tone: "red" };
+    }
     return { headline: "FAILED", subline: rs.message, tone: "red" };
   }
 

@@ -43,6 +43,7 @@ const FATAL_KEYS = new Set([
   "abort",
   "fatal-engine",
   "disk-full",
+  "heap-corruption",
 ]);
 
 type RuleDef = {
@@ -230,10 +231,42 @@ const RULES: RuleDef[] = [
     suggestedFix: "If players report rubber-banding, check UDP and server CPU; otherwise note and monitor.",
   },
   {
+    key: "a2s-init-failed",
+    severity: "error",
+    title: "A2S / query init failed",
+    test: (t) => /\[A2S\].*Init failed|A2S is now turned off|\[A2S\].*query.*fail/i.test(t),
+    sample: (full) =>
+      firstLineMatching(full, /\[A2S\].*Init failed|A2S is now turned off/i),
+    explanation:
+      "The Steam query (A2S) layer failed to initialize — server list / browser may not show this host even if the game port works.",
+    likelyCause: "Port conflict, bind issue, or backend networking error.",
+    suggestedFix: "Check UDP 17777, firewall, and logs above the A2S line; restart after fixing.",
+  },
+  {
+    key: "heap-corruption",
+    severity: "critical",
+    title: "Heap corruption or native crash",
+    test: (t) =>
+      /\b(double free|corruption\s*\(|malloc\(\):.*corruption|malloc_consolidate|invalid next size|glibc detected|\*\*\* Error in)\b/i.test(
+        t,
+      ),
+    sample: (full) =>
+      firstLineMatching(
+        full,
+        /\b(double free|corruption|malloc\(\):|glibc detected|\*\*\* Error in)\b/i,
+      ),
+    explanation:
+      "Memory corruption or allocator failure — the process may exit immediately after this line.",
+    likelyCause: "Engine bug, bad mod, or host instability.",
+    suggestedFix: "Capture full log; remove recent mods; verify server build; restart on a clean boot.",
+  },
+  {
     key: "init-failed",
     severity: "error",
     title: "Initialization failed",
-    test: (t) => /\b(unable to initialize|initialization failed|Init failed)\b/i.test(t),
+    test: (t) =>
+      !/\[A2S\].*Init failed|A2S is now turned off/i.test(t) &&
+      /\b(unable to initialize|initialization failed|Init failed)\b/i.test(t),
     sample: (full) => firstLineMatching(full, /\b(unable to initialize|initialization failed)\b/i),
     explanation: "A subsystem failed to start — server may not reach “ready”.",
     likelyCause: "Bad config, missing scenario, or failed dependency load.",

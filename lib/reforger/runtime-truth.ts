@@ -8,9 +8,16 @@ import type { HealthScoreResult } from "@/lib/reforger/health-score";
 import type { RuntimeStateResult } from "@/lib/reforger/runtime-state";
 import { hostsEffectivelyMatch } from "@/lib/connectivity/joinability-model";
 
-export type RuntimeStartupState = "starting" | "running" | "degraded" | "failed";
+export type RuntimeStartupState =
+  | "starting"
+  | "running"
+  | "degraded"
+  | "failed"
+  | "crashed";
 
 export type RuntimeJoinability = "likely_joinable" | "not_joinable" | "unknown";
+
+export type RuntimeA2sStatus = "ok" | "failed" | "unknown";
 
 export type RuntimeTruthFinding = {
   key: string;
@@ -25,6 +32,8 @@ export type RuntimeTruthResult = {
   advertisedAddress?: string;
   /** config.json publicAddress — what clients should use. */
   expectedPublicAddress?: string;
+  /** Log + port-derived A2S / Steam query health. */
+  a2sStatus: RuntimeA2sStatus;
   findings: RuntimeTruthFinding[];
   summary: string;
 };
@@ -52,6 +61,21 @@ function isUnroutableAdvertisedHost(host: string): boolean {
   if (h === "::" || h === "0:0:0:0:0:0:0:0") return true;
   if (h === "127.0.0.1" || h === "::1") return true;
   return false;
+}
+
+/**
+ * True when the log tail shows a post-start native crash / allocator failure.
+ * Kept in sync with log-analysis `heap-corruption` / `segfault` patterns.
+ */
+export function detectCrashInLogTail(tail: string): boolean {
+  return /\b(double free|corruption\s*\(|malloc\(\):.*corruption|malloc_consolidate|invalid next size|glibc detected|\*\*\* Error in|SIGABRT|SIGSEGV|segfault|segmentation fault|core dumped)\b/i.test(
+    tail,
+  );
+}
+
+/** True when logs report A2S / query layer disabled or failed. */
+export function parseLogA2sFailure(tail: string): boolean {
+  return /\[A2S\].*Init failed|A2S is now turned off|\[A2S\].*(fail|error|turned off)/i.test(tail);
 }
 
 /**
@@ -86,6 +110,21 @@ function push(
   findings.push({ key, status, message });
 }
 
+function fatalBootOrStuckLog(logAnalysis: LogAnalysisResult | null, tail: string): boolean {
+  if (!logAnalysis) {
+    return /\b(unable to initialize|initialization failed|fatal|FATAL|segfault|SIGSEGV)\b/i.test(tail);
+  }
+  const hi = logAnalysis.summary.highestSeverity;
+  const hasFatal = logAnalysis.summary.hasFatal;
+  if (hasFatal || hi === "critical") return true;
+  if (hi === "error") {
+    return logAnalysis.issues.some((i) =>
+      ["oom", "segfault", "assert-fail", "init-failed", "disk-full", "heap-corruption"].includes(i.key),
+    );
+  }
+  return false;
+}
+
 /**
  * Evaluate runtime truth for dashboard, joinability, and health — call server-side only.
  */
@@ -108,12 +147,14 @@ export function evaluateRuntimeTruth(input: RuntimeTruthInput): RuntimeTruthResu
 
   let joinability: RuntimeJoinability = "unknown";
   let startupState: RuntimeStartupState = "starting";
+  let a2sStatus: RuntimeA2sStatus = "unknown";
 
   if (!configured) {
     push(findings, "configured", "fail", "SSH / panel is not fully configured.");
     return {
       startupState: "failed",
       joinability: "not_joinable",
+      a2sStatus: "unknown",
       expectedPublicAddress: configPublicAddress ?? undefined,
       findings,
       summary: "Panel is not configured — cannot assess joinability.",
@@ -125,6 +166,7 @@ export function evaluateRuntimeTruth(input: RuntimeTruthInput): RuntimeTruthResu
     return {
       startupState: "failed",
       joinability: "not_joinable",
+      a2sStatus: "unknown",
       expectedPublicAddress: configPublicAddress ?? undefined,
       findings,
       summary: "Cannot reach the host — joinability unknown and likely broken.",
@@ -132,14 +174,53 @@ export function evaluateRuntimeTruth(input: RuntimeTruthInput): RuntimeTruthResu
   }
   push(findings, "ssh", "pass", "Control link reachable.");
 
+  const crashInTail = detectCrashInLogTail(logTail);
+  if (crashInTail && !processRunning) {
+    push(
+      findings,
+      "crash_log",
+      "fail",
+      "Recent logs show a native crash / memory error and the game process is gone — post-start failure.",
+    );
+    const registered = parseLogAdvertisedRegistration(logTail);
+    const advertisedAddress = registered ? `${registered.host}:${registered.port}` : undefined;
+    if (parseLogA2sFailure(logTail)) {
+      a2sStatus = "failed";
+      push(findings, "a2s_log", "fail", "Logs show A2S / query init failed before crash.");
+    } else {
+      a2sStatus = a2sPortBound ? "ok" : "unknown";
+    }
+    return {
+      startupState: "crashed",
+      joinability: "not_joinable",
+      a2sStatus,
+      advertisedAddress,
+      expectedPublicAddress: configPublicAddress?.trim() || undefined,
+      findings,
+      summary:
+        "Process exited after crash signatures in the log (e.g. heap corruption) — treat as down until restarted.",
+    };
+  }
+
+  if (crashInTail && processRunning) {
+    push(
+      findings,
+      "crash_log",
+      "fail",
+      "Logs show crash / corruption signatures while a process is still reported — unstable or exiting.",
+    );
+    return {
+      startupState: "failed",
+      joinability: "not_joinable",
+      a2sStatus: parseLogA2sFailure(logTail) ? "failed" : "unknown",
+      expectedPublicAddress: configPublicAddress?.trim() || undefined,
+      findings,
+      summary: "Fatal error in recent logs — server may be crashing or stuck; do not treat as healthy.",
+    };
+  }
+
   const hi = logAnalysis?.summary.highestSeverity ?? "none";
-  const hasFatalLog =
-    logAnalysis?.summary.hasFatal ||
-    hi === "critical" ||
-    (hi === "error" &&
-      logAnalysis?.issues.some((i) =>
-        ["oom", "segfault", "assert-fail", "init-failed", "disk-full"].includes(i.key),
-      ));
+  const hasFatalLog = fatalBootOrStuckLog(logAnalysis, logTail);
 
   if (hasFatalLog) {
     push(
@@ -151,6 +232,7 @@ export function evaluateRuntimeTruth(input: RuntimeTruthInput): RuntimeTruthResu
     return {
       startupState: "failed",
       joinability: "not_joinable",
+      a2sStatus: parseLogA2sFailure(logTail) ? "failed" : "unknown",
       expectedPublicAddress: configPublicAddress ?? undefined,
       findings,
       summary: logAnalysis?.issues[0]?.title
@@ -167,10 +249,22 @@ export function evaluateRuntimeTruth(input: RuntimeTruthInput): RuntimeTruthResu
   } else {
     push(findings, "udp_game", "pass", `UDP :${checkPort} visible.`);
   }
-  if (!a2sPortBound) {
-    push(findings, "udp_a2s", "warn", "UDP :17777 not visible — query / Steam list may fail.");
-  } else {
+
+  const a2sLogFailed = parseLogA2sFailure(logTail);
+  if (a2sLogFailed) {
+    a2sStatus = "failed";
+    push(
+      findings,
+      "a2s_log",
+      "fail",
+      "Logs report A2S / query failure (e.g. init failed or A2S turned off) — Steam server browser may not list this host.",
+    );
+  } else if (a2sPortBound) {
+    a2sStatus = "ok";
     push(findings, "udp_a2s", "pass", "UDP :17777 visible.");
+  } else {
+    a2sStatus = "unknown";
+    push(findings, "udp_a2s", "warn", "UDP :17777 not visible — query / Steam list may fail.");
   }
 
   const registered = parseLogAdvertisedRegistration(logTail);
@@ -228,9 +322,15 @@ export function evaluateRuntimeTruth(input: RuntimeTruthInput): RuntimeTruthResu
     joinability = "not_joinable";
   } else if (!gamePortBound) {
     joinability = "not_joinable";
-  } else if (registered && !isUnroutableAdvertisedHost(registered.host) && portsOk && processRunning) {
+  } else if (
+    registered &&
+    !isUnroutableAdvertisedHost(registered.host) &&
+    portsOk &&
+    processRunning &&
+    !a2sLogFailed
+  ) {
     joinability = "likely_joinable";
-  } else if (portsOk && processRunning && pub && !registrationBlocksJoin) {
+  } else if (portsOk && processRunning && pub && !registrationBlocksJoin && !a2sLogFailed) {
     joinability = "likely_joinable";
   } else if (portsOk && processRunning) {
     joinability = "unknown";
@@ -238,31 +338,39 @@ export function evaluateRuntimeTruth(input: RuntimeTruthInput): RuntimeTruthResu
     joinability = "unknown";
   }
 
-  if (hasFatalLog) {
-    startupState = "failed";
-  } else if (registrationBlocksJoin || !gamePortBound) {
+  if (registrationBlocksJoin || !gamePortBound) {
     startupState = infraUp ? "degraded" : "starting";
   } else if (!processRunning || !tmuxActive) {
     startupState = "starting";
   } else if (joinability === "not_joinable") {
     startupState = "degraded";
-  } else if (joinability === "likely_joinable" && portsOk) {
+  } else if (a2sLogFailed) {
+    startupState = "degraded";
+  } else if (joinability === "likely_joinable" && portsOk && !a2sLogFailed) {
     startupState = "running";
+  } else if (!portsOk && processRunning && !a2sLogFailed) {
+    startupState = "starting";
   } else {
-    startupState = portsOk ? "running" : "degraded";
+    startupState = "degraded";
   }
 
   let summary: string;
-  if (registrationBlocksJoin) {
+  if (a2sLogFailed && registrationBlocksJoin) {
+    summary =
+      "Invalid advertised registration (e.g. 0.0.0.0) and A2S/query failed — not suitable for public play until fixed.";
+  } else if (registrationBlocksJoin) {
     summary =
       "Server process and ports may be up, but logs show registration on a non-public address (e.g. 0.0.0.0) — clients cannot join until publicAddress is correct.";
+  } else if (a2sLogFailed) {
+    summary =
+      "A2S / query layer failed in logs — Steam browser listing may be broken even if the game port responds.";
   } else if (!gamePortBound) {
     summary = "Game UDP port is not bound — server is not ready for players.";
   } else if (joinability === "likely_joinable" && startupState === "running") {
-    summary = "Runtime looks healthy: process, ports, and joinability checks pass.";
+    summary = "Runtime looks healthy: process, ports, registration, and A2S checks pass.";
   } else if (startupState === "degraded") {
     summary =
-      "Runtime is degraded: check registration line, publicAddress, and UDP ports before expecting players to connect.";
+      "Runtime is degraded: check registration line, publicAddress, A2S messages, and UDP ports before expecting players.";
   } else {
     summary = "Server is still converging or verification is incomplete — see findings below.";
   }
@@ -272,44 +380,84 @@ export function evaluateRuntimeTruth(input: RuntimeTruthInput): RuntimeTruthResu
     joinability,
     advertisedAddress,
     expectedPublicAddress,
+    a2sStatus,
     findings,
     summary,
   };
 }
 
 /**
- * Cap health score when joinability is broken so the hero does not show false "Healthy".
+ * Cap health score when joinability or A2S is broken so the hero does not show false "Healthy".
  */
 export function mergeHealthScoreWithRuntimeTruth(
   base: HealthScoreResult,
   truth: RuntimeTruthResult,
 ): HealthScoreResult {
-  if (truth.joinability !== "not_joinable") return base;
+  if (
+    truth.joinability !== "not_joinable" &&
+    truth.a2sStatus !== "failed" &&
+    truth.startupState !== "crashed" &&
+    truth.startupState !== "degraded"
+  ) {
+    return base;
+  }
 
-  const penalty = "Joinability blocked — registration or ports (−25)";
-  const nextScore = Math.min(base.score, 49);
-  const nextPenalties = [...base.penalties, penalty];
+  const penalties = [...base.penalties];
+  let nextScore = base.score;
+
+  if (truth.startupState === "crashed") {
+    penalties.push("Server crashed — native / heap error (−50)");
+    nextScore = Math.min(nextScore, 24);
+  } else {
+    if (truth.joinability === "not_joinable") {
+      penalties.push("Joinability blocked — registration or ports (−25)");
+      nextScore = Math.min(nextScore, 49);
+    }
+    if (truth.a2sStatus === "failed") {
+      penalties.push("A2S / query failed in logs (−15)");
+      nextScore = Math.min(nextScore, 59);
+    }
+    if (truth.startupState === "degraded") {
+      nextScore = Math.min(nextScore, 54);
+    }
+  }
+
   let nextStatus: HealthScoreResult["status"] = base.status;
-  if (nextScore < 40) nextStatus = "Critical";
+  if (nextScore < 45) nextStatus = "Critical";
   else if (nextScore < 60) nextStatus = "Warning";
   else nextStatus = "Degraded";
+
+  const summaryFromTruth =
+    truth.startupState === "crashed"
+      ? truth.summary
+      : (truth.findings.find((f) => f.key === "log_registration" && f.status === "fail")?.message ??
+        (truth.a2sStatus === "failed"
+          ? truth.findings.find((f) => f.key === "a2s_log")?.message
+          : undefined) ??
+        `Runtime: ${truth.summary}`);
 
   return {
     ...base,
     score: nextScore,
     status: nextStatus,
-    penalties: nextPenalties,
-    summary:
-      truth.findings.find((f) => f.key === "log_registration" && f.status === "fail")?.message ??
-      `Joinability: not joinable — ${truth.summary}`,
+    penalties,
+    summary: summaryFromTruth,
   };
 }
 
-/** Override naive classifier output when truth shows failed boot or non-joinable server. */
+/** Override naive classifier output when truth shows failed boot, crash, or non-joinable server. */
 export function applyTruthToRuntimeState(
   base: RuntimeStateResult,
   truth: RuntimeTruthResult,
 ): RuntimeStateResult {
+  if (truth.startupState === "crashed") {
+    return {
+      state: "failed",
+      title: "Server crashed",
+      message: truth.summary,
+      confidence: "high",
+    };
+  }
   if (truth.startupState === "failed") {
     return {
       state: "failed",
@@ -322,6 +470,14 @@ export function applyTruthToRuntimeState(
     return {
       state: "warning",
       title: "Not joinable",
+      message: truth.summary,
+      confidence: "high",
+    };
+  }
+  if (truth.startupState === "degraded") {
+    return {
+      state: "warning",
+      title: "Degraded runtime",
       message: truth.summary,
       confidence: "high",
     };

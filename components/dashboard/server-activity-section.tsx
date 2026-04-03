@@ -160,6 +160,19 @@ export function ServerActivitySection({
               >
                 Joinability: {runtimeTruth.joinability.replace(/_/g, " ")}
               </Badge>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "font-normal",
+                  runtimeTruth.a2sStatus === "ok"
+                    ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-300"
+                    : runtimeTruth.a2sStatus === "failed"
+                      ? "border-red-500/40 text-red-700 dark:text-red-300"
+                      : "border-border text-muted-foreground",
+                )}
+              >
+                A2S: {runtimeTruth.a2sStatus}
+              </Badge>
             </div>
             {(runtimeTruth.advertisedAddress || runtimeTruth.expectedPublicAddress) && (
               <p className="text-[11px] text-muted-foreground">

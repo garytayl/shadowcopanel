@@ -5,10 +5,13 @@ import { applyFixServerDefaults } from "@/lib/reforger/fix-server-defaults";
 import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
 import { validateReforgerConfigForFixServer } from "@/lib/reforger/config-validate";
 import { analyzeReforgerLogs } from "@/lib/reforger/log-analysis";
+import { evaluateRuntimeTruth } from "@/lib/reforger/runtime-truth";
+import type { RuntimeTruthResult } from "@/lib/reforger/runtime-truth";
 import {
   killRefogerProcessesPgrep,
   killTmuxSessionLoose,
   snapshotRuntimeState,
+  snapshotUdpPortsBound,
   waitForPostRestartConvergence,
   waitUntilProcessesGone,
 } from "@/lib/ssh/orchestration";
@@ -42,6 +45,7 @@ export async function runSafeRestartPipeline(opts?: SafeRestartOptions): Promise
   const settings = getPublicServerSettings();
   const checkPort = settings.checkPort;
   const env = requireServerEnv();
+  const panelHost = env.REFORGER_SSH_HOST ?? "";
   const session = env.REFORGER_TMUX_SESSION;
   const reason = opts?.reason ?? "manual";
 
@@ -259,9 +263,27 @@ export async function runSafeRestartPipeline(opts?: SafeRestartOptions): Promise
   push(steps, "Post-restart verification", verifyStepStatus, verifyMsg);
 
   let logAnalysis: LogAnalysisResult | undefined;
+  let postRestartTruth: RuntimeTruthResult | undefined;
   try {
     const tail = await getRecentLogs(400);
     logAnalysis = analyzeReforgerLogs(tail);
+    const portsDetail = await snapshotUdpPortsBound(checkPort);
+    const pubRaw = applied.config.publicAddress;
+    postRestartTruth = evaluateRuntimeTruth({
+      logTail: tail,
+      logAnalysis,
+      sshReachable: true,
+      configured: true,
+      processRunning: after.processRunning,
+      tmuxActive: after.tmuxActive,
+      serverLikelyUp: after.processRunning && after.tmuxActive && after.portsBound,
+      gamePortBound: portsDetail.game,
+      a2sPortBound: portsDetail.a2s,
+      checkPort,
+      configPublicAddress:
+        pubRaw != null && String(pubRaw).trim() !== "" ? String(pubRaw).trim() : null,
+      panelHost,
+    });
     const hi = logAnalysis.summary.highestSeverity;
     if (hi === "none") {
       push(steps, "Post-restart log analysis", "ok", "No known failure patterns in tail.");
@@ -280,6 +302,23 @@ export async function runSafeRestartPipeline(opts?: SafeRestartOptions): Promise
         `${logAnalysis.summary.totalIssues} low-severity pattern(s).`,
       );
     }
+    if (postRestartTruth) {
+      const tOk =
+        postRestartTruth.startupState === "running" &&
+        postRestartTruth.joinability !== "not_joinable" &&
+        postRestartTruth.a2sStatus !== "failed";
+      push(
+        steps,
+        "Runtime truth (joinability & A2S)",
+        tOk ? "ok" : postRestartTruth.startupState === "crashed" || postRestartTruth.startupState === "failed"
+          ? "fail"
+          : "warn",
+        `${postRestartTruth.startupState} · ${postRestartTruth.joinability} · A2S ${postRestartTruth.a2sStatus} — ${postRestartTruth.summary}`.slice(
+          0,
+          280,
+        ),
+      );
+    }
   } catch (e) {
     push(
       steps,
@@ -292,13 +331,22 @@ export async function runSafeRestartPipeline(opts?: SafeRestartOptions): Promise
   const detectedIssues = logAnalysis?.issues.map((i) => i.title) ?? [];
 
   const fullyHealthy = converge.succeededOnAttempt != null;
+  const logSevere =
+    logAnalysis &&
+    (logAnalysis.summary.hasFatal || logAnalysis.summary.highestSeverity === "critical");
   const logBad =
     logAnalysis &&
     (logAnalysis.summary.hasFatal ||
       logAnalysis.summary.highestSeverity === "critical" ||
       logAnalysis.summary.highestSeverity === "error");
 
-  if (fullyHealthy && !logBad) {
+  const runtimeOk =
+    postRestartTruth &&
+    postRestartTruth.startupState === "running" &&
+    postRestartTruth.joinability !== "not_joinable" &&
+    postRestartTruth.a2sStatus !== "failed";
+
+  if (fullyHealthy && runtimeOk && !logSevere) {
     let summary = "Restart completed — server looks healthy.";
     if (converge.succeededOnAttempt != null && converge.succeededOnAttempt > 1) {
       if (converge.portsBoundLate) {
@@ -311,6 +359,23 @@ export async function runSafeRestartPipeline(opts?: SafeRestartOptions): Promise
       success: true,
       level: "success",
       summary,
+      steps,
+      before,
+      after,
+      configRepaired,
+      normalizationNotes: normalizationNotes.length ? normalizationNotes : undefined,
+      detectedIssues: detectedIssues.length ? detectedIssues : undefined,
+      logAnalysis,
+      reason,
+      verification,
+    };
+  }
+
+  if (fullyHealthy && !runtimeOk && postRestartTruth) {
+    return {
+      success: true,
+      level: "warning",
+      summary: `Restarted, but runtime checks failed: ${postRestartTruth.summary}`,
       steps,
       before,
       after,
