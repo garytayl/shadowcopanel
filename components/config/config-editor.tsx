@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { motion } from "framer-motion";
-import { FileDown, Loader2, Save, Download } from "lucide-react";
+import { FileDown, Images, Loader2, Save, Download } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -279,6 +279,120 @@ export function ConfigEditor() {
                   value={form.networkViewDistance}
                   onChange={(n) => setForm((f) => ({ ...f, networkViewDistance: n }))}
                 />
+              </CardContent>
+            </Card>
+
+            <Card className="mt-6 rounded-2xl border-border/80">
+              <CardHeader>
+                <CardTitle className="text-base">Server identity</CardTitle>
+                <CardDescription>
+                  Optional backend fields (see Bohemia server config wiki). Leave blank to keep defaults.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="dedicatedServerId">Dedicated server ID</Label>
+                  <Input
+                    id="dedicatedServerId"
+                    placeholder="e.g. ar-gm-myserver"
+                    value={form.dedicatedServerId}
+                    onChange={(e) => setForm((f) => ({ ...f, dedicatedServerId: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="region">Region</Label>
+                  <Input
+                    id="region"
+                    placeholder="US, EU, AS, AU, SA, AF"
+                    value={form.region}
+                    onChange={(e) => setForm((f) => ({ ...f, region: e.target.value }))}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-6 rounded-2xl border-border/80">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Images className="size-4 text-primary" aria-hidden />
+                  Presentation &amp; images
+                </CardTitle>
+                <CardDescription>
+                  Written to <code className="text-xs">game.gameProperties.missionHeader</code>. Text
+                  fields set how the session is described in-game. Image fields are{" "}
+                  <strong>Enfusion resource names</strong> (GUID paths to <code className="text-xs">.edds</code>{" "}
+                  assets), not regular web URLs—copy them from Workbench or an existing scenario config.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="mname">Mission display name</Label>
+                  <Input
+                    id="mname"
+                    placeholder="m_sName"
+                    value={form.missionDisplayName}
+                    onChange={(e) => setForm((f) => ({ ...f, missionDisplayName: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="mauth">Mission author</Label>
+                  <Input
+                    id="mauth"
+                    placeholder="m_sAuthor"
+                    value={form.missionAuthor}
+                    onChange={(e) => setForm((f) => ({ ...f, missionAuthor: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="mdesc">Short description</Label>
+                  <Input
+                    id="mdesc"
+                    placeholder="m_sDescription"
+                    value={form.missionDescription}
+                    onChange={(e) => setForm((f) => ({ ...f, missionDescription: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="mdet">Rules / long details</Label>
+                  <Textarea
+                    id="mdet"
+                    placeholder="m_sDetails"
+                    rows={4}
+                    value={form.missionDetails}
+                    onChange={(e) => setForm((f) => ({ ...f, missionDetails: e.target.value }))}
+                    className="min-h-[100px] resize-y rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="micon">Icon (resource name)</Label>
+                  <Input
+                    id="micon"
+                    className="font-mono text-xs"
+                    placeholder="{…}path/to/icon.edds — m_sIcon"
+                    value={form.missionIcon}
+                    onChange={(e) => setForm((f) => ({ ...f, missionIcon: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="mload">Loading screen (resource name)</Label>
+                  <Input
+                    id="mload"
+                    className="font-mono text-xs"
+                    placeholder="m_sLoadingScreen"
+                    value={form.missionLoadingScreen}
+                    onChange={(e) => setForm((f) => ({ ...f, missionLoadingScreen: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="mprev">Preview image (resource name)</Label>
+                  <Input
+                    id="mprev"
+                    className="font-mono text-xs"
+                    placeholder="m_sPreviewImage"
+                    value={form.missionPreviewImage}
+                    onChange={(e) => setForm((f) => ({ ...f, missionPreviewImage: e.target.value }))}
+                  />
+                </div>
               </CardContent>
             </Card>
           </motion.div>

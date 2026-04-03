@@ -93,7 +93,7 @@ That almost always means **the TCP path to port 22 never completed the SSH hands
 | Area        | Behavior |
 |------------|----------|
 | **Dashboard** | SSH reachability, tmux/process heuristics, EC2 target (copy **user@host**), **remote system** snapshot (kernel, uptime, disk, load, tmux), ports (`ss`), memory/process, **auto-refresh every 30s**, quick actions (start/stop/restart, health, ports, logs). |
-| **Config**    | Load/save `config.json` over SFTP; form + raw JSON; **download JSON backup**. |
+| **Config**    | Load/save `config.json` over SFTP; form + raw JSON; **mission header** text + **icon / loading / preview** resource paths; optional **dedicatedServerId** / **region**; **download JSON backup**. |
 | **Marketplace** | **Official Arma Reforger Workshop** (reforger.armaplatform.com) catalog: search, sort, optional tag filter, import by URL, mod detail with dependencies, **drag-and-drop server stack**, save to remote `config.json` (same `mods` array as **Mods**). Catalog fetch runs **only on the Next.js server** (see `lib/workshop/`). |
 | **Mods**      | Table-first editor: reorder, enable toggle, JSON preview; **export mods JSON**; save to remote config. |
 | **Logs**      | Tail logs, search + filters, health hints; **download current view** as `.txt`. |
