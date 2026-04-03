@@ -21,6 +21,7 @@ import {
 } from "@/lib/actions/mods";
 import { downloadTextFile } from "@/lib/utils/download";
 import type { WorkshopCatalogMod, WorkshopSearchResult, WorkshopSort } from "@/lib/workshop/types";
+import { formatSubscriberCount, formatWorkshopRating } from "@/lib/utils/format";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,16 +60,42 @@ function signature(payload: ModRowPayload[]): string {
   );
 }
 
-const SORT_OPTIONS: { value: WorkshopSort; label: string }[] = [
-  { value: "popular", label: "Popular" },
-  { value: "newest", label: "Newest" },
-  { value: "rating", label: "Rating" },
-  { value: "subscribers", label: "Subscribers" },
-  { value: "updated", label: "Updated" },
-  { value: "name", label: "Name" },
-  { value: "oldest", label: "Oldest" },
-  { value: "relevance", label: "Relevance" },
+const SORT_GROUPS: {
+  label: string;
+  options: { value: WorkshopSort; label: string }[];
+}[] = [
+  {
+    label: "Engagement",
+    options: [
+      { value: "popular", label: "Most popular (workshop default)" },
+      { value: "subscribers", label: "Most subscribed" },
+      { value: "rating", label: "Highest rated %" },
+    ],
+  },
+  {
+    label: "Date",
+    options: [
+      { value: "newest", label: "Newest published" },
+      { value: "updated", label: "Recently updated" },
+      { value: "oldest", label: "Oldest" },
+    ],
+  },
+  {
+    label: "Other",
+    options: [
+      { value: "name", label: "Name A–Z" },
+      { value: "relevance", label: "Relevance (with search text)" },
+    ],
+  },
 ];
+
+function sortOptionLabel(value: WorkshopSort): string {
+  for (const g of SORT_GROUPS) {
+    const o = g.options.find((x) => x.value === value);
+    if (o) return o.label;
+  }
+  return value;
+}
 
 export function MarketplaceClient() {
   const [draftQuery, setDraftQuery] = useState("");
@@ -300,9 +327,9 @@ export function MarketplaceClient() {
                     className="rounded-xl"
                   />
                 </div>
-                <div className="w-full space-y-2 sm:w-44">
+                <div className="w-full space-y-2 sm:min-w-[220px] sm:max-w-xs">
                   <label className="text-xs font-medium text-muted-foreground" htmlFor="sort">
-                    Sort
+                    Sort results
                   </label>
                   <select
                     id="sort"
@@ -313,10 +340,14 @@ export function MarketplaceClient() {
                       setPage(1);
                     }}
                   >
-                    {SORT_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
+                    {SORT_GROUPS.map((g) => (
+                      <optgroup key={g.label} label={g.label}>
+                        {g.options.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -345,10 +376,18 @@ export function MarketplaceClient() {
                   )}
                   Search
                 </Button>
-                <p className="self-center text-xs text-muted-foreground">
-                  {catalog
-                    ? `${catalog.totalCount.toLocaleString()} results (page ${catalog.page} of ${totalPages})`
-                    : null}
+                <p className="max-w-md self-center text-xs leading-snug text-muted-foreground">
+                  {catalog ? (
+                    <>
+                      <span className="font-medium text-foreground">{catalog.totalCount.toLocaleString()}</span>{" "}
+                      mods · page {catalog.page} of {totalPages}
+                      <span className="mt-0.5 block text-[11px]">
+                        Sorted by {sortOptionLabel(catalog.sort)}
+                        {committedQuery.trim() ? ` · matching “${committedQuery.trim()}”` : ""}
+                        {tagFilter.trim() ? ` · tag ${tagFilter.trim()}` : ""}
+                      </span>
+                    </>
+                  ) : null}
                 </p>
               </div>
 
@@ -433,6 +472,21 @@ export function MarketplaceClient() {
                   {m.summary ? (
                     <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">{m.summary}</p>
                   ) : null}
+                  <div className="mb-2 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
+                    {m.averageRating != null ? (
+                      <Badge variant="secondary" className="font-normal tabular-nums">
+                        {formatWorkshopRating(m.averageRating)} rated
+                      </Badge>
+                    ) : null}
+                    {m.subscriberCount != null ? (
+                      <Badge variant="secondary" className="font-normal tabular-nums">
+                        {formatSubscriberCount(m.subscriberCount)} subs
+                      </Badge>
+                    ) : null}
+                    {m.ratingCount != null ? (
+                      <span className="self-center tabular-nums">{m.ratingCount.toLocaleString()} votes</span>
+                    ) : null}
+                  </div>
                   <div className="mt-auto flex flex-wrap items-center gap-2">
                     {m.version ? (
                       <Badge variant="outline" className="font-mono text-[10px]">
@@ -578,6 +632,7 @@ export function MarketplaceClient() {
         modId={detailId}
         open={detailOpen}
         onOpenChange={setDetailOpen}
+        onModIdChange={(id) => setDetailId(id)}
         onAdd={(mod) => {
           addMod(mod);
           setDetailOpen(false);

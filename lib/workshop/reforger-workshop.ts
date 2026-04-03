@@ -13,14 +13,23 @@ import type {
   WorkshopProvider,
   WorkshopSearchResult,
   WorkshopSort,
+  WorkshopScreenshot,
+  WorkshopVersionInfo,
 } from "@/lib/workshop/types";
 
 /** Raw listing row from workshop __NEXT_DATA__ */
 type WorkshopListRow = {
   id: string;
   name: string;
+  type?: string;
   summary?: string;
   currentVersionNumber?: string;
+  currentVersionSize?: number;
+  averageRating?: number;
+  ratingCount?: number;
+  subscriberCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
   previews?: Array<{
     url?: string;
     thumbnails?: { "image/jpeg"?: Array<{ url?: string }> };
@@ -46,13 +55,35 @@ type RawDepNode = {
 type WorkshopAssetDetail = {
   id: string;
   name: string;
+  type?: string;
   summary?: string;
   description?: string;
   currentVersionNumber?: string;
+  currentVersionSize?: number;
+  averageRating?: number;
+  ratingCount?: number;
+  subscriberCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  license?: string;
+  licenseText?: string | null;
+  gameVersion?: string;
+  obsolete?: boolean;
+  blocked?: boolean;
   previews?: WorkshopListRow["previews"];
+  screenshots?: Array<{ url?: string; width?: number; height?: number }>;
   author?: { username?: string };
   tags?: Array<{ name?: string }>;
   dependencies?: RawDepNode[];
+  versions?: Array<{
+    version: string;
+    published?: boolean;
+    gameVersion?: string | number;
+    createdAt?: string;
+    totalFileSize?: number;
+    dependenciesCount?: number;
+  }>;
+  contributors?: Array<{ username?: string }>;
 };
 
 type WorkshopDetailPageProps = {
@@ -69,6 +100,53 @@ function thumbUrl(row: WorkshopListRow): string | undefined {
 
 function workshopSourceUrl(modId: string): string {
   return `${REFORGER_WORKSHOP_ORIGIN}/workshop/${modId}`;
+}
+
+function collectGalleryUrls(a: WorkshopAssetDetail): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (u: string | undefined) => {
+    if (u && !seen.has(u)) {
+      seen.add(u);
+      out.push(u);
+    }
+  };
+  for (const p of a.previews ?? []) {
+    push(p.url);
+    for (const t of p.thumbnails?.["image/jpeg"] ?? []) {
+      push(t.url);
+    }
+  }
+  for (const s of a.screenshots ?? []) {
+    push(s.url);
+  }
+  return out;
+}
+
+function mapVersions(raw: WorkshopAssetDetail["versions"]): WorkshopVersionInfo[] | undefined {
+  if (!raw?.length) return undefined;
+  return raw.map((v) => ({
+    version: v.version,
+    published: v.published,
+    gameVersion:
+      v.gameVersion === undefined || v.gameVersion === null
+        ? undefined
+        : String(v.gameVersion),
+    createdAt: v.createdAt,
+    totalFileSize: v.totalFileSize,
+    dependenciesCount: v.dependenciesCount,
+  }));
+}
+
+function mapScreenshots(
+  raw: WorkshopAssetDetail["screenshots"],
+): WorkshopScreenshot[] | undefined {
+  if (!raw?.length) return undefined;
+  const out: WorkshopScreenshot[] = [];
+  for (const s of raw) {
+    if (s.url) out.push({ url: s.url, width: s.width, height: s.height });
+  }
+  return out.length ? out : undefined;
 }
 
 /**
@@ -114,22 +192,51 @@ function normalizeListRow(row: WorkshopListRow): WorkshopCatalogMod {
     dependencyCount: undefined,
     tags: row.tags?.map((t) => t.name).filter((x): x is string => Boolean(x)),
     imageUrl: thumbUrl(row),
+    averageRating: row.averageRating,
+    ratingCount: row.ratingCount,
+    subscriberCount: row.subscriberCount,
+    fileSizeBytes: row.currentVersionSize,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    type: row.type,
   };
 }
 
 function normalizeDetailAsset(a: WorkshopAssetDetail): WorkshopCatalogMod {
   const flat = flattenDependencyNodes(a.dependencies);
+  const gallery = collectGalleryUrls(a);
+  const contributors = a.contributors
+    ?.map((c) => c.username)
+    .filter((x): x is string => typeof x === "string" && Boolean(x.trim()));
+
   return {
     modId: a.id,
     name: a.name,
     author: a.author?.username,
     version: a.currentVersionNumber,
     sourceUrl: workshopSourceUrl(a.id),
-    summary: a.summary ?? a.description?.slice(0, 500),
+    summary: a.summary,
+    description: a.description,
     dependencies: flat,
     dependencyCount: flat.length,
     tags: a.tags?.map((t) => t.name).filter((x): x is string => Boolean(x)),
     imageUrl: thumbUrl(a),
+    galleryUrls: gallery.length > 0 ? gallery : undefined,
+    screenshots: mapScreenshots(a.screenshots),
+    averageRating: a.averageRating,
+    ratingCount: a.ratingCount,
+    subscriberCount: a.subscriberCount,
+    fileSizeBytes: a.currentVersionSize,
+    createdAt: a.createdAt,
+    updatedAt: a.updatedAt,
+    type: a.type,
+    license: a.license,
+    licenseText: a.licenseText ?? null,
+    gameVersion: a.gameVersion,
+    obsolete: a.obsolete,
+    blocked: a.blocked,
+    versions: mapVersions(a.versions),
+    contributors: contributors?.length ? contributors : undefined,
   };
 }
 
