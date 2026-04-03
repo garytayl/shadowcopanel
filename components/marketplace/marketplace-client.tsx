@@ -579,7 +579,7 @@ export function MarketplaceClient() {
                   layout
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="group flex flex-col rounded-2xl border border-border/70 bg-card/50 p-4 transition-colors hover:border-border hover:bg-card"
+                  className="group flex flex-col rounded-2xl border border-border/70 bg-card/50 p-4 transition-all duration-300 ease-out hover:-translate-y-1 hover:border-primary/25 hover:bg-card hover:shadow-lg hover:shadow-primary/10 motion-reduce:hover:translate-y-0"
                 >
                   <div className="mb-3 flex gap-3">
                     {m.imageUrl ? (

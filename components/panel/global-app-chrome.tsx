@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -99,16 +100,21 @@ export function GlobalAppChrome() {
               className="rounded-xl"
             />
             <ul className="mt-2 max-h-72 overflow-auto rounded-xl border border-border/60">
-              {filtered.map((p) => (
-                <li key={p.href}>
+              {filtered.map((p, i) => (
+                <motion.li
+                  key={p.href}
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.035, duration: 0.22 }}
+                >
                   <Link
                     href={p.href}
-                    className="block px-3 py-2.5 text-sm hover:bg-muted/80"
+                    className="block px-3 py-2.5 text-sm transition-colors duration-150 hover:bg-primary/10 hover:text-foreground"
                     onClick={() => setCmdOpen(false)}
                   >
                     {p.label}
                   </Link>
-                </li>
+                </motion.li>
               ))}
               {filtered.length === 0 ? (
                 <li className="px-3 py-4 text-center text-sm text-muted-foreground">No matches</li>

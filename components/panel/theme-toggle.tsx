@@ -1,6 +1,7 @@
 "use client";
 
 import { Moon, Sun } from "lucide-react";
+import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 
@@ -32,7 +33,15 @@ export function ThemeToggle() {
       aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
       onClick={() => setTheme(dark ? "light" : "dark")}
     >
-      {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+      <motion.span
+        key={dark ? "sun" : "moon"}
+        initial={{ rotate: -90, opacity: 0 }}
+        animate={{ rotate: 0, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 400, damping: 22 }}
+        className="inline-flex"
+      >
+        {dark ? <Sun className="size-4 text-amber-300" /> : <Moon className="size-4 text-sky-600" />}
+      </motion.span>
     </Button>
   );
 }
