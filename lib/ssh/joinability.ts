@@ -70,11 +70,12 @@ export async function runJoinabilityDiagnostics(): Promise<JoinabilityResult> {
   const env = requireServerEnv();
   const sessionPort = Number(process.env.REFORGER_CHECK_PORT?.trim() || "2001") || 2001;
 
-  const [status, portChecks, cfg] = await Promise.all([
+  const [status, portResult, cfg] = await Promise.all([
     getServerRuntimeStatus({ control }),
     getGamePortChecks(sessionPort),
     getRemoteConfigParsed().catch(() => null),
   ]);
+  const portChecks = portResult.checks;
 
   const configPublicAddress = cfg?.publicAddress != null ? String(cfg.publicAddress).trim() : null;
   const panelHost = env.REFORGER_SSH_HOST;

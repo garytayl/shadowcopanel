@@ -68,6 +68,7 @@ function safeDashboardExport(snap: DashboardSnapshot) {
     status: snap.status,
     ports: snap.ports,
     portChecks: snap.portChecks,
+    portCheckSsRaw: snap.portCheckSsRaw,
     health: snap.health,
     system: snap.system,
   };
@@ -586,9 +587,15 @@ export function DashboardClient() {
             </div>
           </div>
           <div>
-            <p className="mb-1 text-[10px] uppercase text-muted-foreground">Ports (ss)</p>
+            <p className="mb-1 text-[10px] uppercase text-muted-foreground">Ports (ss grep, check port)</p>
             <pre className="max-h-36 overflow-auto rounded-xl bg-muted/50 p-3 font-mono text-[10px] leading-relaxed">
               {snap?.ports.stdout || "—"}
+            </pre>
+          </div>
+          <div>
+            <p className="mb-1 text-[10px] uppercase text-muted-foreground">Port check snapshot (ss -tuanp)</p>
+            <pre className="max-h-48 overflow-auto rounded-xl bg-muted/50 p-3 font-mono text-[10px] leading-relaxed">
+              {snap?.portCheckSsRaw?.trim() || "—"}
             </pre>
           </div>
           <div className="grid gap-4 md:grid-cols-2">

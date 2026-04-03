@@ -36,8 +36,9 @@ export function parseLoad1m(loadavgLine: string): LoadParse | null {
   return { pct, label: `1m ${v.toFixed(2)}` };
 }
 
+import { lineHasBoundPort } from "@/lib/connectivity/ss-port-parse";
+
+/** Whether any `ss` line shows the port bound (avoids false positives like :12001 vs :2001). */
 export function portLineMentionsGamePort(ssOutput: string, gamePort: number): boolean {
-  const s = ssOutput.toLowerCase();
-  const p = String(gamePort);
-  return s.includes(`:${p}`) || s.includes(`:${p} `) || s.includes(`:${p}\n`);
+  return ssOutput.split(/\r?\n/).some((line) => lineHasBoundPort(line, gamePort));
 }

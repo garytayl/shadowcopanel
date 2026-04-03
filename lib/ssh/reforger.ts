@@ -121,8 +121,9 @@ export async function restartServer(): Promise<{ message: string }> {
 
 export async function getListeningPorts(): Promise<{ stdout: string; stderr: string }> {
   const port = process.env.REFORGER_CHECK_PORT?.trim() || "2001";
+  /** `-tuanp`: all states — UDP bound sockets are often UNCONN, not LISTEN (avoid `-l`-only views). */
   const r = await sshExec(
-    `ss -tulnp 2>/dev/null | grep -F -- ${shSingleQuote(port)} || true`,
+    `ss -tuanp 2>/dev/null | grep -E ${shSingleQuote(`:${port}([^0-9]|$)`)} || true`,
   );
   return { stdout: r.stdout.trim(), stderr: r.stderr.trim() };
 }

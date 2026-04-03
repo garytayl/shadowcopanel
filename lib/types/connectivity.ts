@@ -13,8 +13,12 @@ export type ControlLinkQuality = "good" | "moderate" | "slow" | "unknown";
 export type PortCheck = {
   port: number;
   protocol: "udp" | "tcp";
+  /** Bound / accepting traffic — for UDP this includes UNCONN sockets (see ss output), not only TCP LISTEN. */
   status: "listening" | "not_listening" | "unknown";
+  /** Full matched `ss` line (trimmed) for debugging. */
   detail?: string;
+  /** From `users:(("name",pid=…))` when present. */
+  processName?: string;
 };
 
 export type JoinabilityOverall = "healthy" | "warning" | "broken" | "unknown";

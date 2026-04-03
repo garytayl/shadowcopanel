@@ -22,6 +22,8 @@ export type DashboardSnapshot = {
   ports: { stdout: string };
   /** Parsed UDP/TCP socket hints for game ports (not UDP gameplay RTT). */
   portChecks: PortCheck[];
+  /** Raw `ss -tuanp` snapshot used for port checks (Advanced / troubleshooting). */
+  portCheckSsRaw: string;
   health: { free: string; pgrep: string };
   system: Awaited<ReturnType<typeof getSystemSnapshot>>;
 };
@@ -33,7 +35,7 @@ export async function fetchDashboardSnapshot(): Promise<
   if (g !== true) return g;
   try {
     const settings = getPublicServerSettings();
-    const [status, ports, portChecks, health, system] = await Promise.all([
+    const [status, ports, portResult, health, system] = await Promise.all([
       getServerRuntimeStatus(),
       getListeningPorts(),
       getGamePortChecks(settings.checkPort),
@@ -44,7 +46,8 @@ export async function fetchDashboardSnapshot(): Promise<
       settings,
       status,
       ports: { stdout: ports.stdout },
-      portChecks,
+      portChecks: portResult.checks,
+      portCheckSsRaw: portResult.ssRaw,
       health,
       system,
     });

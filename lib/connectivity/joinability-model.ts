@@ -101,9 +101,9 @@ export function buildJoinabilityResult(input: JoinabilityBuildInput): Joinabilit
       status: st,
       message:
         p2001.status === "listening"
-          ? "Socket present (ss)"
+          ? `UDP socket visible in ss (bound / UNCONN is normal)${p2001.processName ? ` — ${p2001.processName}` : ""}`
           : p2001.status === "not_listening"
-            ? "Not seen listening (game may be down or port differs)"
+            ? "No matching UDP line in ss (game down, different port, or ss parse issue)"
             : p2001.detail ?? "Could not determine",
     });
   }
@@ -121,7 +121,7 @@ export function buildJoinabilityResult(input: JoinabilityBuildInput): Joinabilit
             : "warn",
       message:
         p17777.status === "listening"
-          ? "Socket present"
+          ? `UDP socket visible in ss${p17777.processName ? ` — ${p17777.processName}` : ""}`
           : "Not seen (may be normal depending on build / query setup)",
     });
   }

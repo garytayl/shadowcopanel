@@ -82,7 +82,10 @@ export function ConfigEditor() {
   }, []);
 
   useEffect(() => {
-    void load({ silent: true });
+    const id = requestAnimationFrame(() => {
+      void load({ silent: true });
+    });
+    return () => cancelAnimationFrame(id);
   }, [load]);
 
   const saveForm = async () => {

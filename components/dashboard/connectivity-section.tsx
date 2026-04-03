@@ -38,7 +38,7 @@ import {
 import { MetricBar } from "@/components/dashboard/metric-bar";
 import { cn } from "@/lib/utils";
 
-function PortBadge({ status }: { status: string }) {
+function PortBadge({ status, protocol }: { status: string; protocol: "udp" | "tcp" }) {
   const variant =
     status === "listening"
       ? "default"
@@ -47,10 +47,12 @@ function PortBadge({ status }: { status: string }) {
         : "destructive";
   const label =
     status === "listening"
-      ? "Listening"
+      ? protocol === "udp"
+        ? "Bound"
+        : "Listening"
       : status === "unknown"
         ? "Unknown"
-        : "Not listening";
+        : "Not seen";
   return (
     <Badge variant={variant} className="font-normal">
       {label}
@@ -236,7 +238,7 @@ export function ConnectivitySection({
             <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               <Activity className="size-3.5 text-primary/90" aria-hidden />
               Game port visibility
-              <Hint label="Whether ss reports a UDP/TCP socket on these ports on the instance. This is not a packet RTT test." />
+              <Hint label="Parsed from ss -tuanp (all states). UDP often shows UNCONN, not LISTEN — both count as bound here. Not a packet RTT test." />
             </div>
             <div className="flex flex-wrap gap-3">
               {(snap?.portChecks ?? []).map((p) => (
@@ -247,7 +249,12 @@ export function ConnectivitySection({
                   <span className="font-mono text-xs text-muted-foreground">
                     {p.protocol.toUpperCase()} {p.port}
                   </span>
-                  <PortBadge status={p.status} />
+                  <PortBadge status={p.status} protocol={p.protocol} />
+                  {p.processName ? (
+                    <span className="text-[10px] text-muted-foreground" title={p.detail}>
+                      {p.processName}
+                    </span>
+                  ) : null}
                 </div>
               ))}
               {!snap?.portChecks?.length && (
