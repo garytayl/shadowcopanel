@@ -7,6 +7,8 @@ import {
   AlertTriangle,
   ClipboardCopy,
   Download,
+  ExternalLink,
+  Filter,
   History,
   Link2,
   Loader2,
@@ -46,6 +48,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MarketplaceCatalogSkeleton } from "@/components/marketplace/marketplace-catalog-skeleton";
 import { ModDetailDialog } from "@/components/marketplace/mod-detail-dialog";
+import { Hint } from "@/components/dashboard/hint";
 import { MarketplaceStack } from "@/components/marketplace/marketplace-stack";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -366,131 +369,67 @@ export function MarketplaceClient() {
   }, [stack]);
 
   return (
-    <div className="space-y-8" data-library-rev={libraryTick}>
+    <div className="space-y-6" data-library-rev={libraryTick}>
       {dirty ? (
-        <Alert className="rounded-2xl border-amber-500/40 bg-amber-500/[0.07]">
-          <AlertTriangle className="size-4 text-amber-500" />
-          <AlertTitle>Unsaved changes</AlertTitle>
-          <AlertDescription>
-            Your stack differs from the last load from the server. Save to write{" "}
-            <code className="text-xs">mods</code> to remote <code className="text-xs">config.json</code>, or
-            restore.
-          </AlertDescription>
-        </Alert>
+        <div className="flex flex-col gap-3 rounded-2xl border border-amber-500/35 bg-amber-500/[0.07] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
+            <div>
+              <p className="text-sm font-medium text-foreground">Unsaved stack</p>
+              <p className="text-xs text-muted-foreground">
+                Save writes <code className="text-[10px]">mods</code> to remote{" "}
+                <code className="text-[10px]">config.json</code>, or restore below.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            className="h-10 shrink-0 touch-manipulation sm:h-9"
+            onClick={() => void saveStack()}
+            disabled={saving}
+          >
+            {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+            Save to server
+          </Button>
+        </div>
       ) : null}
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_min(100%,380px)] xl:grid-cols-[1fr_400px]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_min(100%,420px)] xl:gap-8 xl:items-start">
         <motion.div
           ref={catalogTopRef}
-          className="min-w-0 space-y-4"
+          className="order-2 min-w-0 space-y-4 xl:order-1"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <Card className="rounded-2xl border-border/80">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Workshop catalog</CardTitle>
-              <CardDescription>
-                Search the public Reforger Workshop (same catalog as reforger.armaplatform.com).
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <div className="flex-1 space-y-2">
-                  <label className="text-xs font-medium text-muted-foreground" htmlFor="mq">
-                    Search
-                  </label>
-                  <Input
-                    ref={searchInputRef}
-                    id="mq"
-                    placeholder="Mod name or keyword… (press / to focus)"
-                    value={draftQuery}
-                    onChange={(e) => setDraftQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") applySearch();
-                    }}
-                    className="rounded-xl"
-                  />
-                </div>
-                <div className="w-full space-y-2 sm:min-w-[220px] sm:max-w-xs">
-                  <label className="text-xs font-medium text-muted-foreground" htmlFor="sort">
-                    Sort results
-                  </label>
-                  <select
-                    id="sort"
-                    className="flex h-9 w-full rounded-xl border border-input bg-background px-3 text-sm"
-                    value={sort}
-                    onChange={(e) => {
-                      setSort(e.target.value as WorkshopSort);
-                      setPage(1);
-                    }}
-                  >
-                    {SORT_GROUPS.map((g) => (
-                      <optgroup key={g.label} label={g.label}>
-                        {g.options.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </div>
+          <section className="rounded-2xl border border-border/70 bg-gradient-to-b from-card/90 to-card/40 p-4 shadow-sm ring-1 ring-white/[0.04] md:p-5">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h2 className="text-base font-semibold tracking-tight">Search catalog</h2>
+                <p className="text-[11px] text-muted-foreground">Press <kbd className="rounded border border-border/80 bg-muted/50 px-1 font-mono text-[10px]">/</kbd> to focus</p>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground" htmlFor="tag">
-                  Tag filter (optional)
-                </label>
+              <Hint label="Search is executed on this app’s server; your browser does not call the workshop API directly." />
+            </div>
+
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
+              <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-stretch">
                 <Input
-                  id="tag"
-                  placeholder="e.g. VEHICLE"
-                  value={tagFilter}
-                  onChange={(e) => {
-                    setTagFilter(e.target.value);
-                    setPage(1);
+                  ref={searchInputRef}
+                  id="mq"
+                  placeholder="Keywords…"
+                  value={draftQuery}
+                  onChange={(e) => setDraftQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") applySearch();
                   }}
-                  className="rounded-xl"
+                  className="h-11 min-h-11 flex-1 rounded-xl"
                 />
-              </div>
-              {quickTags.length > 0 ? (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">Tags on this page</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {quickTags.map((t) => (
-                      <Button
-                        key={t}
-                        type="button"
-                        variant={tagFilter.trim().toLowerCase() === t.toLowerCase() ? "secondary" : "outline"}
-                        size="sm"
-                        className="h-7 rounded-full px-2.5 text-[11px] font-normal"
-                        onClick={() => {
-                          setTagFilter(t);
-                          setPage(1);
-                        }}
-                      >
-                        {t}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/15 px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="starred-only"
-                    checked={starredOnly}
-                    onCheckedChange={(v) => setStarredOnly(!!v)}
-                    size="sm"
-                  />
-                  <Label htmlFor="starred-only" className="cursor-pointer text-sm font-normal">
-                    Starred only (this page)
-                  </Label>
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  {starredEntries.length} starred in browser · recents saved locally
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => applySearch()} disabled={catalogLoading}>
+                <Button
+                  type="button"
+                  className="h-11 min-h-11 shrink-0 touch-manipulation sm:px-6"
+                  onClick={() => applySearch()}
+                  disabled={catalogLoading}
+                >
                   {catalogLoading ? (
                     <Loader2 className="mr-2 size-4 animate-spin" />
                   ) : (
@@ -498,54 +437,145 @@ export function MarketplaceClient() {
                   )}
                   Search
                 </Button>
-                <p className="max-w-md self-center text-xs leading-snug text-muted-foreground">
-                  {catalog ? (
+              </div>
+              <div className="flex w-full flex-col gap-1.5 lg:w-[min(100%,260px)] lg:shrink-0">
+                <Label htmlFor="sort" className="sr-only">
+                  Sort
+                </Label>
+                <select
+                  id="sort"
+                  className="h-11 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  value={sort}
+                  onChange={(e) => {
+                    setSort(e.target.value as WorkshopSort);
+                    setPage(1);
+                  }}
+                >
+                  {SORT_GROUPS.map((g) => (
+                    <optgroup key={g.label} label={g.label}>
+                      {g.options.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <details className="group mt-4 border-t border-border/50 pt-4">
+              <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+                <Filter className="size-3.5 shrink-0" aria-hidden />
+                <span>Tag filter, quick tags, starred filter, import URL</span>
+                <span className="text-[10px] font-normal text-muted-foreground/80">— optional</span>
+              </summary>
+              <div className="mt-4 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="tag" className="text-xs text-muted-foreground">
+                    Tag
+                  </Label>
+                  <Input
+                    id="tag"
+                    placeholder="e.g. VEHICLE"
+                    value={tagFilter}
+                    onChange={(e) => {
+                      setTagFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="h-10 rounded-xl"
+                  />
+                </div>
+                {quickTags.length > 0 ? (
+                  <div>
+                    <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Tags on this page
+                    </p>
+                    <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+                      {quickTags.map((t) => (
+                        <Button
+                          key={t}
+                          type="button"
+                          variant={
+                            tagFilter.trim().toLowerCase() === t.toLowerCase() ? "secondary" : "outline"
+                          }
+                          size="sm"
+                          className="h-8 shrink-0 rounded-full px-3 text-[11px] font-normal"
+                          onClick={() => {
+                            setTagFilter(t);
+                            setPage(1);
+                          }}
+                        >
+                          {t}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted/25 px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="starred-only"
+                      checked={starredOnly}
+                      onCheckedChange={(v) => setStarredOnly(!!v)}
+                      size="sm"
+                    />
+                    <Label htmlFor="starred-only" className="cursor-pointer text-xs font-normal">
+                      Starred only · this page
+                    </Label>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    {starredEntries.length} starred · local only
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Input
+                    placeholder="Paste workshop URL…"
+                    value={importUrl}
+                    onChange={(e) => setImportUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void pasteImport();
+                    }}
+                    className="min-h-11 flex-1 rounded-xl"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="min-h-11 shrink-0 touch-manipulation"
+                    disabled={importing}
+                    onClick={() => void pasteImport()}
+                  >
+                    {importing ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                    Add from URL
+                  </Button>
+                </div>
+              </div>
+            </details>
+
+            {catalog ? (
+              <p className="mt-4 border-t border-border/50 pt-3 text-[11px] leading-relaxed text-muted-foreground">
+                <span className="font-medium text-foreground">{catalog.totalCount.toLocaleString()}</span> mods
+                total · page {catalog.page} of {totalPages}
+                {catalogLoading ? (
+                  <span className="ml-2 inline-flex items-center gap-1 text-primary">
+                    <Loader2 className="size-3 animate-spin" />
+                    Loading…
+                  </span>
+                ) : null}
+                <span className="mt-1 block text-[10px] opacity-90">
+                  {sortOptionLabel(catalog.sort)}
+                  {committedQuery.trim() ? ` · “${committedQuery.trim()}”` : ""}
+                  {tagFilter.trim() ? ` · tag ${tagFilter.trim()}` : ""}
+                  {inStackOnPage > 0 ? (
                     <>
-                      <span className="font-medium text-foreground">{catalog.totalCount.toLocaleString()}</span>{" "}
-                      mods · page {catalog.page} of {totalPages}
-                      {catalogLoading ? (
-                        <span className="ml-2 inline-flex items-center gap-1 text-[11px] text-primary">
-                          <Loader2 className="size-3 animate-spin" />
-                          Refreshing…
-                        </span>
-                      ) : null}
-                      <span className="mt-0.5 block text-[11px]">
-                        Sorted by {sortOptionLabel(catalog.sort)}
-                        {committedQuery.trim() ? ` · matching “${committedQuery.trim()}”` : ""}
-                        {tagFilter.trim() ? ` · tag ${tagFilter.trim()}` : ""}
-                        {inStackOnPage > 0 ? (
-                          <>
-                            {" "}
-                            · <span className="text-foreground">{inStackOnPage}</span> on this page already in stack
-                          </>
-                        ) : null}
-                      </span>
+                      {" "}
+                      · <span className="text-foreground">{inStackOnPage}</span> on page in stack
                     </>
                   ) : null}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-2 border-t border-border/60 pt-4">
-                <p className="w-full text-xs font-medium text-muted-foreground">Import by URL</p>
-                <Input
-                  placeholder="https://reforger.armaplatform.com/workshop/…"
-                  value={importUrl}
-                  onChange={(e) => setImportUrl(e.target.value)}
-                  className="min-w-[200px] flex-1 rounded-xl"
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  disabled={importing}
-                  onClick={() => void pasteImport()}
-                >
-                  {importing ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                  Add from URL
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                </span>
+              </p>
+            ) : null}
+          </section>
 
           {catalogError ? (
             <Alert variant="destructive" className="rounded-2xl">
@@ -572,7 +602,14 @@ export function MarketplaceClient() {
           ) : null}
 
           {!catalogLoading && catalog && displayMods.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-sm font-semibold tracking-tight">Results</h3>
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {displayMods.length} on this page
+                </span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
               {displayMods.map((m) => (
                 <motion.div
                   key={m.modId}
@@ -689,17 +726,19 @@ export function MarketplaceClient() {
                     href={m.sourceUrl}
                     target="_blank"
                     rel="noreferrer noopener"
-                    className="mt-2 truncate text-[10px] text-primary underline-offset-2 hover:underline"
+                    className="mt-2 inline-flex max-w-full items-center gap-1.5 truncate text-[10px] text-muted-foreground transition-colors hover:text-primary"
                   >
-                    {m.sourceUrl}
+                    <ExternalLink className="size-3 shrink-0" aria-hidden />
+                    <span className="truncate underline-offset-2 hover:underline">Open on workshop</span>
                   </a>
                 </motion.div>
               ))}
+              </div>
             </div>
           ) : null}
 
           {catalog && catalog.totalCount > 0 ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/50 bg-muted/15 px-3 py-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -747,31 +786,132 @@ export function MarketplaceClient() {
         </motion.div>
 
         <motion.aside
-          className="space-y-4 lg:sticky lg:top-4 lg:self-start"
+          className="order-1 space-y-4 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:self-start lg:pr-1 xl:order-2"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
         >
-          <Card className="rounded-2xl border-border/80">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Library</CardTitle>
-              <CardDescription>Stored in this browser only (not synced to the server).</CardDescription>
+          <Card className="rounded-2xl border-primary/15 bg-card/80 shadow-sm ring-1 ring-primary/10">
+            <CardHeader className="space-y-1 pb-3">
+              <CardTitle className="text-base">Server stack</CardTitle>
+              <CardDescription className="text-xs leading-relaxed">
+                Load order for <code className="text-[10px]">config.json</code> · same list as{" "}
+                <Link className="font-medium text-primary underline underline-offset-2" href="/mods">
+                  Mods
+                </Link>
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <History className="size-3.5" />
-                  Recent
+              {stackLoading ? (
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  Loading from server…
                 </p>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    className="h-11 w-full touch-manipulation"
+                    onClick={() => void saveStack()}
+                    disabled={saving || !dirty}
+                  >
+                    {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+                    Save to server
+                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="min-h-10 flex-1 touch-manipulation"
+                      onClick={() => restoreRemote()}
+                      disabled={stackLoading}
+                    >
+                      <RotateCcw className="mr-2 size-4" />
+                      Restore
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="min-h-10 flex-1 touch-manipulation"
+                      onClick={() => discardLocal()}
+                      disabled={!dirty}
+                    >
+                      Discard
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    <span className="font-medium text-foreground">{stack.length}</span> mod(s) ·{" "}
+                    {remoteSig ? (
+                      remoteSig === stackSig ? (
+                        <span className="text-emerald-600 dark:text-emerald-400">matches server</span>
+                      ) : (
+                        <span className="text-amber-600 dark:text-amber-400">differs from server</span>
+                      )
+                    ) : (
+                      "—"
+                    )}
+                  </p>
+                  <div className="flex gap-2 border-t border-border/60 pt-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="min-h-10 flex-1"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(jsonExport);
+                        toast.success("Copied mods JSON");
+                      }}
+                    >
+                      <ClipboardCopy className="mr-2 size-4" />
+                      Copy JSON
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="min-h-10 flex-1"
+                      onClick={() =>
+                        downloadTextFile(
+                          `reforger-marketplace-mods-${new Date().toISOString().slice(0, 10)}.json`,
+                          jsonExport,
+                        )
+                      }
+                    >
+                      <Download className="mr-2 size-4" />
+                      Export
+                    </Button>
+                  </div>
+                  <MarketplaceStack rows={stack} onChange={setStack} />
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <details className="group rounded-2xl border border-border/70 bg-card/40 open:bg-card/60">
+            <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium outline-none [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <History className="size-4 text-muted-foreground" aria-hidden />
+                  Browser library
+                </span>
+                <span className="text-[11px] font-normal text-muted-foreground group-open:hidden">Recent & starred</span>
+              </span>
+            </summary>
+            <div className="space-y-4 border-t border-border/60 px-4 pb-4 pt-2">
+              <p className="text-[11px] text-muted-foreground">Local only — not synced to the server.</p>
+              <div>
+                <p className="mb-2 text-xs font-medium text-muted-foreground">Recent</p>
                 {recentEntries.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Open a mod detail to populate recents.</p>
+                  <p className="text-xs text-muted-foreground">Open a mod detail to populate.</p>
                 ) : (
-                  <ul className="max-h-36 space-y-1 overflow-y-auto pr-1 text-sm">
+                  <ul className="max-h-32 space-y-0.5 overflow-y-auto text-sm">
                     {recentEntries.map((r) => (
                       <li key={r.modId}>
                         <button
                           type="button"
-                          className="w-full truncate rounded-md px-2 py-1 text-left text-xs hover:bg-muted/80"
+                          className="w-full truncate rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/80"
                           onClick={() => {
                             setDetailId(r.modId);
                             setDetailOpen(true);
@@ -785,19 +925,16 @@ export function MarketplaceClient() {
                 )}
               </div>
               <div>
-                <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <Star className="size-3.5" />
-                  Starred
-                </p>
+                <p className="mb-2 text-xs font-medium text-muted-foreground">Starred</p>
                 {starredEntries.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Use the star icon on cards or in detail.</p>
+                  <p className="text-xs text-muted-foreground">Star items from cards or detail.</p>
                 ) : (
-                  <ul className="max-h-36 space-y-1 overflow-y-auto pr-1 text-sm">
+                  <ul className="max-h-32 space-y-0.5 overflow-y-auto text-sm">
                     {starredEntries.map((s) => (
                       <li key={s.modId}>
                         <button
                           type="button"
-                          className="w-full truncate rounded-md px-2 py-1 text-left text-xs hover:bg-muted/80"
+                          className="w-full truncate rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/80"
                           onClick={() => {
                             setDetailId(s.modId);
                             setDetailOpen(true);
@@ -810,93 +947,8 @@ export function MarketplaceClient() {
                   </ul>
                 )}
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border-border/80">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Server mod stack</CardTitle>
-              <CardDescription>
-                Order matters. This mirrors the <Link className="text-primary underline" href="/mods">Mods</Link>{" "}
-                page but tuned for discovery.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {stackLoading ? (
-                <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" />
-                  Loading from server…
-                </p>
-              ) : (
-                <>
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" onClick={() => void saveStack()} disabled={saving || !dirty}>
-                      {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
-                      Save to server
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => restoreRemote()}
-                      disabled={stackLoading}
-                    >
-                      <RotateCcw className="mr-2 size-4" />
-                      Restore from server
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => discardLocal()}
-                      disabled={!dirty}
-                    >
-                      Discard changes
-                    </Button>
-                  </div>
-                  <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">Compare:</span>{" "}
-                    {stack.length} mod(s) in editor
-                    {remoteSig ? (
-                      <>
-                        {" "}
-                        · remote snapshot {remoteSig === stackSig ? "matches" : "differs"}
-                      </>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        void navigator.clipboard.writeText(jsonExport);
-                        toast.success("Copied mods JSON");
-                      }}
-                    >
-                      <ClipboardCopy className="mr-2 size-4" />
-                      Copy JSON
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        downloadTextFile(
-                          `reforger-marketplace-mods-${new Date().toISOString().slice(0, 10)}.json`,
-                          jsonExport,
-                        )
-                      }
-                    >
-                      <Download className="mr-2 size-4" />
-                      Export file
-                    </Button>
-                  </div>
-                  <MarketplaceStack rows={stack} onChange={setStack} />
-                </>
-              )}
-            </CardContent>
-          </Card>
+            </div>
+          </details>
         </motion.aside>
       </div>
 

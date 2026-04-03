@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { InPlainEnglish } from "@/components/help/in-plain-english";
+
 import { MarketplaceClient } from "@/components/marketplace/marketplace-client";
 import { PageHeader } from "@/components/panel/page-header";
 
@@ -8,28 +8,25 @@ export default function MarketplacePage() {
     <>
       <PageHeader
         title="Marketplace"
-        description="Browse the official Reforger Workshop and compose your server mod stack in one place."
-      >
-        <InPlainEnglish>
-          <p>
-            This is the <strong>same public catalog</strong> as{" "}
+        description={
+          <span className="text-muted-foreground">
+            Official Reforger Workshop catalog — same data as{" "}
             <Link
-              className="font-medium text-foreground underline underline-offset-2"
+              className="text-foreground underline underline-offset-4 hover:text-primary"
               href="https://reforger.armaplatform.com/workshop"
               target="_blank"
               rel="noreferrer noopener"
             >
-              reforger.armaplatform.com/workshop
+              reforger.armaplatform.com
             </Link>
-            —not Steam. Searching runs on this app&apos;s server (your browser never talks to the workshop
-            directly). For raw rows and JSON, use{" "}
-            <Link className="font-medium text-foreground underline underline-offset-2" href="/mods">
+            . Search runs on this app; edit your server stack on the right. For raw JSON use{" "}
+            <Link className="text-foreground underline underline-offset-4 hover:text-primary" href="/mods">
               Mods
             </Link>
             .
-          </p>
-        </InPlainEnglish>
-      </PageHeader>
+          </span>
+        }
+      />
       <MarketplaceClient />
     </>
   );
