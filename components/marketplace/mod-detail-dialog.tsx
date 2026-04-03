@@ -281,7 +281,7 @@ export function ModDetailDialog({
                 <TabsContent value="stats" className="m-0">
                   <ScrollArea className="max-h-[min(58vh,520px)] space-y-4 p-5 pt-4">
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <Stat label="Average rating" value={formatWorkshopRating(mod.averageRating)} hint="from workshop" />
+                    <Stat label="Average rating" value={formatWorkshopRating(mod.averageRating)} hint="from the Workshop page" />
                     <Stat label="Ratings count" value={mod.ratingCount != null ? String(mod.ratingCount) : "—"} />
                     <Stat label="Subscribers" value={formatSubscriberCount(mod.subscriberCount)} />
                     <Stat label="Current build size" value={formatFileSize(mod.fileSizeBytes)} />

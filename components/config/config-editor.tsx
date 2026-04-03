@@ -179,7 +179,7 @@ export function ConfigEditor() {
         <AlertTitle className="flex items-center gap-2">
           Passwords &amp; privacy
           <Hint
-            label="Values you save here are written to the remote config.json over SSH. They are not encrypted in that file unless you use host-level tooling—treat this page like a secrets form."
+            label="Whatever you save gets written straight onto your server’s settings file as normal text—not locked or hidden. Treat this screen like a password manager: don’t share screenshots."
             size="md"
           />
         </AlertTitle>
@@ -194,7 +194,7 @@ export function ConfigEditor() {
           {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Download className="mr-2 size-4" />}
           Load current file from server
         </Button>
-        <Hint label="Re-reads config.json from the host and refreshes the form, raw editor, and anomaly banner." />
+        <Hint label="Grabs the newest settings file from your server and refreshes everything you see here." />
         <Button
           type="button"
           variant="secondary"
@@ -204,12 +204,12 @@ export function ConfigEditor() {
           {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Wrench className="mr-2 size-4" />}
           Repair / normalize config
         </Button>
-        <Hint label="Fetches the file, runs the same normalization as saves (merge legacy top-level mods, dedupe), validates, then writes—creates a .bak when a prior file exists." />
+        <Hint label="Cleans up bad mod layout (fixes duplicates, puts mods where the game expects them), saves, and backs up the old file first if one was there." />
         <Button type="button" variant="outline" onClick={() => void downloadExport()} disabled={saving}>
           {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <FileDown className="mr-2 size-4" />}
           Download a backup copy
         </Button>
-        <Hint label="Downloads the current normalized JSON to your computer—handy before risky edits." />
+        <Hint label="Downloads a copy to your PC—do this before you experiment so you can undo." />
       </div>
 
       <Tabs defaultValue="form" className="w-full">
@@ -223,7 +223,7 @@ export function ConfigEditor() {
             <Card className="rounded-2xl border-border/80">
               <CardHeader>
                 <CardTitle className="text-base">
-                  <TitleWithHint hint="These map to top-level network fields and game.* in config.json. Saving always re-reads the remote file first, then merges—other keys in the file are preserved.">
+                  <TitleWithHint hint="The main server name, ports, and passwords. When you hit Save, we always pull the latest file from your machine first so nothing gets overwritten by mistake.">
                     Server &amp; network
                   </TitleWithHint>
                 </CardTitle>
@@ -236,7 +236,7 @@ export function ConfigEditor() {
                   <LabelWithHint
                     htmlFor="serverName"
                     label="Server name"
-                    hint="Displayed in the server browser and in-game as game.name."
+                    hint="The name players see in the server list and in-game."
                   />
                   <Input
                     id="serverName"
@@ -248,7 +248,7 @@ export function ConfigEditor() {
                   <LabelWithHint
                     htmlFor="password"
                     label="Password"
-                    hint="Password players type to join; stored as game.password on the server file."
+                    hint="The password players join with. It’s stored in plain text on the server—same as most game configs."
                   />
                   <Input
                     id="password"
@@ -262,7 +262,7 @@ export function ConfigEditor() {
                   <LabelWithHint
                     htmlFor="admin"
                     label="Admin password"
-                    hint="Administrator / RCON-style access; game.passwordAdmin. Keep it secret."
+                    hint="Your admin password (whoever runs the server uses this). Keep it private."
                   />
                   <Input
                     id="admin"
@@ -276,7 +276,7 @@ export function ConfigEditor() {
                   <LabelWithHint
                     htmlFor="bindAddress"
                     label="Bind address"
-                    hint="IP the dedicated server listens on. 0.0.0.0 = all network interfaces on the machine."
+                    hint="Which network card the game listens on. 0.0.0.0 means “listen on all networks”—usually what you want."
                   />
                   <Input
                     id="bindAddress"
@@ -287,7 +287,7 @@ export function ConfigEditor() {
                 <NumberInput
                   id="bindPort"
                   label="Bind port"
-                  hint="Primary game UDP port (bindPort). Open this UDP port in your cloud security group and match REFORGER_CHECK_PORT on the panel when possible."
+                  hint="The game’s main UDP port. Open this port in your cloud firewall (security group) for players. This panel’s “check port” setting should match this number."
                   value={form.bindPort}
                   onChange={(n) => setForm((f) => ({ ...f, bindPort: n }))}
                 />
@@ -295,7 +295,7 @@ export function ConfigEditor() {
                   <LabelWithHint
                     htmlFor="pubAddr"
                     label="Public address"
-                    hint="Hostname or IP you advertise to players (publicAddress). Should match your instance’s public DNS/IP for joinability checks."
+                    hint="The address you tell friends to use—your server’s public IP or hostname. It should match what your cloud provider shows you."
                   />
                   <Input
                     id="pubAddr"
@@ -306,7 +306,7 @@ export function ConfigEditor() {
                 <NumberInput
                   id="pubPort"
                   label="Public port"
-                  hint="Port shown to clients (publicPort). Often same as bind port; differs if you use port forwarding."
+                  hint="The port players connect to. Usually the same as bind port; only different if you’re port-forwarding through a router."
                   value={form.publicPort}
                   onChange={(n) => setForm((f) => ({ ...f, publicPort: n }))}
                 />
@@ -314,7 +314,7 @@ export function ConfigEditor() {
                   <LabelWithHint
                     htmlFor="a2sAddr"
                     label="A2S address"
-                    hint="Steam server-browser query bind address (a2s.address). Often 0.0.0.0 on the game host."
+                    hint="Where the server answers Steam’s “server list” queries. Usually leave 0.0.0.0 unless you know you need something else."
                   />
                   <Input
                     id="a2sAddr"
@@ -325,14 +325,14 @@ export function ConfigEditor() {
                 <NumberInput
                   id="a2sPort"
                   label="A2S port"
-                  hint="UDP port for A2S queries (server list / Steam tools). Must be reachable if you rely on browser listing."
+                  hint="Extra UDP port for Steam/ server-browser tools. Open it in the firewall if you care about showing up in lists."
                   value={form.a2sPort}
                   onChange={(n) => setForm((f) => ({ ...f, a2sPort: n }))}
                 />
                 <NumberInput
                   id="maxPl"
                   label="Max players"
-                  hint="Upper bound for concurrent players (game.maxPlayers)."
+                  hint="Max players allowed on the server at once."
                   value={form.maxPlayers}
                   onChange={(n) => setForm((f) => ({ ...f, maxPlayers: n }))}
                 />
@@ -342,7 +342,7 @@ export function ConfigEditor() {
                       <p className="text-sm font-medium">Visible in server browser</p>
                       <p className="text-xs text-muted-foreground">game.visible</p>
                     </div>
-                    <Hint label="If off, the session may not appear in public listings (behavior depends on Reforger version)." />
+                    <Hint label="If off, your server might not show in the public browser list (depends on the game). On = easier to find." />
                   </div>
                   <Switch
                     checked={form.visible}
@@ -355,7 +355,7 @@ export function ConfigEditor() {
                       <p className="text-sm font-medium">Cross-platform</p>
                       <p className="text-xs text-muted-foreground">game.crossPlatform</p>
                     </div>
-                    <Hint label="Allows console and PC players together when the build supports it." />
+                    <Hint label="Lets PC and console players play together when the game supports it." />
                   </div>
                   <Switch
                     checked={form.crossPlatform}
@@ -365,14 +365,14 @@ export function ConfigEditor() {
                 <NumberInput
                   id="smvd"
                   label="Server max view distance"
-                  hint="game.gameProperties.serverMaxViewDistance — server-side simulation range cap (meters)."
+                  hint="How far the server simulates in meters—bigger numbers cost more CPU."
                   value={form.serverMaxViewDistance}
                   onChange={(n) => setForm((f) => ({ ...f, serverMaxViewDistance: n }))}
                 />
                 <NumberInput
                   id="nvd"
                   label="Network view distance"
-                  hint="game.gameProperties.networkViewDistance — how far the server streams entities to clients."
+                  hint="How far the server sends world detail to players (meters). Lower can help performance."
                   value={form.networkViewDistance}
                   onChange={(n) => setForm((f) => ({ ...f, networkViewDistance: n }))}
                 />
@@ -382,7 +382,7 @@ export function ConfigEditor() {
             <Card className="mt-6 rounded-2xl border-border/80">
               <CardHeader>
                 <CardTitle className="text-base">
-                  <TitleWithHint hint="Optional Bohemia backend fields. Leave blank if you don’t use cloud matchmaking features that require them.">
+                  <TitleWithHint hint="Extra IDs for Bohemia’s backend / matchmaking. Most home servers leave these blank.">
                     Server identity
                   </TitleWithHint>
                 </CardTitle>
@@ -395,7 +395,7 @@ export function ConfigEditor() {
                   <LabelWithHint
                     htmlFor="dedicatedServerId"
                     label="Dedicated server ID"
-                    hint="Stable ID for backend services (dedicatedServerId). Only needed for certain hosting integrations."
+                    hint="A stable ID for Bohemia’s cloud tools. Skip unless your host told you to fill it in."
                   />
                   <Input
                     id="dedicatedServerId"
@@ -408,7 +408,7 @@ export function ConfigEditor() {
                   <LabelWithHint
                     htmlFor="region"
                     label="Region"
-                    hint="Region code (e.g. US, EU) for backend routing when required by your provider."
+                    hint="Rough region code (US, EU, etc.) — only if your hosting setup asks for it."
                   />
                   <Input
                     id="region"
@@ -424,7 +424,7 @@ export function ConfigEditor() {
               <CardHeader>
                 <CardTitle className="flex flex-wrap items-center gap-2 text-base">
                   <Images className="size-4 text-primary" aria-hidden />
-                  <TitleWithHint hint="Mission header drives how your session appears in UI. Image fields are Enfusion .edds resource paths, not HTTP URLs.">
+                  <TitleWithHint hint="How your session looks in menus and loading screens. Pictures aren’t normal web links—they’re special game asset paths (the .edds stuff). Copy them from the editor or another config if you’re unsure.">
                     Presentation &amp; images
                   </TitleWithHint>
                 </CardTitle>
@@ -440,7 +440,7 @@ export function ConfigEditor() {
                   <LabelWithHint
                     htmlFor="mname"
                     label="Mission display name"
-                    hint="missionHeader.m_sName — title shown in server browser / loading UI."
+                    hint="Title players see in the browser and loading screens."
                   />
                   <Input
                     id="mname"
@@ -450,7 +450,7 @@ export function ConfigEditor() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <LabelWithHint htmlFor="mauth" label="Mission author" hint="missionHeader.m_sAuthor." />
+                  <LabelWithHint htmlFor="mauth" label="Mission author" hint="Who made the mission—shown in UI." />
                   <Input
                     id="mauth"
                     placeholder="m_sAuthor"
@@ -462,7 +462,7 @@ export function ConfigEditor() {
                   <LabelWithHint
                     htmlFor="mdesc"
                     label="Short description"
-                    hint="missionHeader.m_sDescription — one-line blurb."
+                    hint="Short one-line description for the server browser."
                   />
                   <Input
                     id="mdesc"
@@ -475,7 +475,7 @@ export function ConfigEditor() {
                   <LabelWithHint
                     htmlFor="mdet"
                     label="Rules / long details"
-                    hint="missionHeader.m_sDetails — longer rules or HTML-like text per Bohemia docs."
+                    hint="Longer rules or details—can be longer text than the short description."
                   />
                   <Textarea
                     id="mdet"
@@ -490,7 +490,7 @@ export function ConfigEditor() {
                   <LabelWithHint
                     htmlFor="micon"
                     label="Icon (resource name)"
-                    hint="missionHeader.m_sIcon — Enfusion resource path to an .edds icon, often starting with {GUID}."
+                    hint="Small icon for the server list. Paste the game’s asset path (weird path with .edds, not a website URL)."
                   />
                   <Input
                     id="micon"
@@ -504,7 +504,7 @@ export function ConfigEditor() {
                   <LabelWithHint
                     htmlFor="mload"
                     label="Loading screen (resource name)"
-                    hint="missionHeader.m_sLoadingScreen — full-screen loading texture resource."
+                    hint="Full-screen picture while loading. Same kind of asset path as the icon."
                   />
                   <Input
                     id="mload"
@@ -518,7 +518,7 @@ export function ConfigEditor() {
                   <LabelWithHint
                     htmlFor="mprev"
                     label="Preview image (resource name)"
-                    hint="missionHeader.m_sPreviewImage — preview still for the session."
+                    hint="Preview image for the session in menus."
                   />
                   <Input
                     id="mprev"
@@ -543,7 +543,7 @@ export function ConfigEditor() {
           <Card className="rounded-2xl border-border/80">
             <CardHeader>
               <CardTitle className="text-base">
-                <TitleWithHint hint="Direct edit of the remote file. On save, JSON is parsed, normalized (e.g. workshop mods moved to game.mods), validated, then written. A timestamped .bak copy is made when a file already exists.">
+                <TitleWithHint hint="Edit the real file yourself. On save we clean up mods (right section of the file), double-check, then upload. If a file already existed, we make a dated backup copy first.">
                   Raw JSON
                 </TitleWithHint>
               </CardTitle>

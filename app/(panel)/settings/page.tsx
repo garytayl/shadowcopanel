@@ -59,7 +59,7 @@ export default function SettingsPage() {
             <div>
               <p className="flex items-center gap-1.5 font-medium text-foreground">
                 Internet address of your server
-                <Hint label="Public IPv4/DNS of your EC2 or VPS—the same host you SSH to manually." />
+                <Hint label="Your server’s public address—the same IP or hostname you’d type to SSH in by hand." />
               </p>
               <p className="font-mono">
                 <span className="text-muted-foreground">REFORGER_SSH_HOST · </span>
@@ -69,7 +69,7 @@ export default function SettingsPage() {
             <div>
               <p className="flex items-center gap-1.5 font-medium text-foreground">
                 Port (usually 22)
-                <Hint label="SSH port. Almost always 22 unless you changed sshd_config or use a bastion." />
+                <Hint label="The door number for remote login. Almost always 22 unless your host told you otherwise." />
               </p>
               <p className="font-mono">
                 <span className="text-muted-foreground">REFORGER_SSH_PORT · </span>
@@ -79,7 +79,7 @@ export default function SettingsPage() {
             <div>
               <p className="flex items-center gap-1.5 font-medium text-foreground">
                 Username on that machine
-                <Hint label="Linux login name for SSH (Ubuntu AMIs often use ubuntu). This app connects as this user." />
+                <Hint label="The Linux username for that machine (often “ubuntu”). This app logs in as that user." />
               </p>
               <p className="font-mono">
                 <span className="text-muted-foreground">REFORGER_SSH_USER · </span>
@@ -89,7 +89,7 @@ export default function SettingsPage() {
             <div>
               <p className="flex items-center gap-1.5 font-medium text-foreground">
                 Key file on this computer (dev only)
-                <Hint label="Local PEM path when you run Next.js on your laptop. On Vercel use the inline key variable instead—no file path there." />
+                <Hint label="Path to your secret key file when you run this app on your own PC. On hosts like Vercel there’s no disk—paste the key in the “inline key” setting instead." />
               </p>
               <p className="font-mono">
                 <span className="text-muted-foreground">REFORGER_SSH_PRIVATE_KEY_PATH · </span>
@@ -99,7 +99,7 @@ export default function SettingsPage() {
             <div>
               <p className="flex items-center gap-1.5 font-medium text-foreground">
                 Key pasted into hosting (e.g. Vercel)
-                <Hint label="Full private key text in env—required for serverless hosts that have no persistent disk for a .pem file." />
+                <Hint label="Paste the whole private key here when your host can’t store a .pem file (typical for serverless)." />
               </p>
               <p className="font-mono">
                 <span className="text-muted-foreground">Inline key · </span>
@@ -120,7 +120,7 @@ export default function SettingsPage() {
             <div>
               <p className="flex items-center gap-1.5 font-medium text-foreground">
                 Game install folder
-                <Hint label="Where Arma Reforger dedicated server binaries live on the instance; tmux start command cds here." />
+                <Hint label="Folder where the Reforger dedicated server program lives. The “start” command runs from here." />
               </p>
               <p className="break-all font-mono">
                 <span className="text-muted-foreground">REFORGER_SERVER_PATH · </span>
@@ -130,7 +130,7 @@ export default function SettingsPage() {
             <div>
               <p className="flex items-center gap-1.5 font-medium text-foreground">
                 Main settings file
-                <Hint label="Remote path to config.json—the Config and Mods pages edit this file over SFTP." />
+                <Hint label="Path to your main server settings file on the machine. Config and Mods pages read and save this file." />
               </p>
               <p className="break-all font-mono">
                 <span className="text-muted-foreground">REFORGER_CONFIG_PATH · </span>
@@ -140,7 +140,7 @@ export default function SettingsPage() {
             <div>
               <p className="flex items-center gap-1.5 font-medium text-foreground">
                 Background session name
-                <Hint label="tmux session name so the panel can send keys (start/stop) to the right pane." />
+                <Hint label="Name of the background session the panel talks to for start/stop—must match what you actually use on the server." />
               </p>
               <p className="font-mono">
                 <span className="text-muted-foreground">REFORGER_TMUX_SESSION · </span>
@@ -154,7 +154,7 @@ export default function SettingsPage() {
             <div>
               <p className="flex items-center gap-1.5 font-medium text-foreground">
                 Start command
-                <Hint label="Shell command run inside tmux—usually ArmaReforgerServer with -config pointing at your JSON." />
+                <Hint label="The exact command that launches the game (usually the Reforger binary plus a pointer to your settings JSON)." />
               </p>
               <p className="break-all font-mono">
                 <span className="text-muted-foreground">REFORGER_SERVER_CMD · </span>
@@ -164,7 +164,7 @@ export default function SettingsPage() {
             <div>
               <p className="flex items-center gap-1.5 font-medium text-foreground">
                 Log file path (optional)
-                <Hint label="If set, Logs page tails this path; otherwise the panel tries to find *.log under the game and XDG config dirs." />
+                <Hint label="If you set this, the Logs page reads that file. If you leave it blank, we hunt for a .log file near the game install." />
               </p>
               <p className="font-mono">
                 <span className="text-muted-foreground">REFORGER_LOG_GLOB · </span>
@@ -178,7 +178,7 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               Is everything set up?
-              <Hint label="Configured means host, user, and key are present in the server env—without that, no page can SSH to your machine." />
+              <Hint label="Green = we have an address, username, and key on file. Without those, this site can’t talk to your cloud PC at all." />
             </CardTitle>
             <CardDescription>Green means this app can reach your server.</CardDescription>
           </CardHeader>

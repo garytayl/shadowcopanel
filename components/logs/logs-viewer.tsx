@@ -91,7 +91,7 @@ export function LogsViewer() {
             {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
             Refresh logs
           </Button>
-          <Hint label="Fetches a fresh tail from the server over SSH (see Settings for REFORGER_LOG_GLOB or auto-discovery)." />
+          <Hint label="Pulls the newest lines from your server’s log file again. Set a log path under Settings, or we auto-find one." />
           <Button
             type="button"
             variant="secondary"
@@ -118,7 +118,7 @@ export function LogsViewer() {
             autoComplete="off"
             enterKeyHint="search"
           />
-          <Hint label="Client-side filter on the text already loaded—does not run a new SSH command." />
+          <Hint label="Filters only what’s already on screen—fast, no extra trip to the server." />
         </div>
       </div>
 
@@ -128,7 +128,7 @@ export function LogsViewer() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 Quick health hints
-                <Hint label="Heuristic counts and phrases parsed from the log tail—use for triage, not as ground truth." />
+                <Hint label="Rough counts and guesses from the text you’re looking at—handy for spotting trouble, not a guarantee." />
               </CardTitle>
               <CardDescription>Automatic guesses from the text on screen—not a substitute for reading the log</CardDescription>
             </CardHeader>
@@ -150,7 +150,7 @@ export function LogsViewer() {
           <CardTitle className="flex flex-wrap items-center gap-2 text-base">
             <Filter className="size-4" />
             Quick filters
-            <Hint label="OR logic: with filters on, a line shows if it matches any active filter. Combine with the search box for AND-style narrowing." />
+            <Hint label="With buttons on, a line shows if it matches any of them (OR). Add the search box to narrow further." />
           </CardTitle>
           <CardDescription>
             Tap a keyword to show only lines that match. Use several at once. Clear to see everything again.
@@ -185,7 +185,7 @@ export function LogsViewer() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             Log text
-            <Hint label="Download exports the filtered view (search + quick filters), not necessarily the full remote file." />
+            <Hint label="Download saves what you see after search and filters—not always the entire log file on disk." />
           </CardTitle>
           <CardDescription>
             Reads the newest log file we can find on your server (or a fixed path if your host set one)

@@ -47,7 +47,7 @@ export function DiagnosticsClient() {
           {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
           Refresh
         </Button>
-        <Hint label="Re-runs a fresh SSH round-trip and reloads system, memory, process, and port samples from the instance." />
+        <Hint label="Connects again and grabs fresh info: OS, RAM, running programs, and ports." />
       </div>
 
       {d?.controlLink ? (
@@ -57,7 +57,7 @@ export function DiagnosticsClient() {
               <CardTitle className="flex flex-wrap items-center gap-2 text-base">
                 <Activity className="size-4" />
                 Control link round-trip
-                <Hint label="Panel → EC2 SSH latency (echo + exec). High values mean slow network or busy host, not FPS." />
+                <Hint label="How long a tiny remote command takes—your “control link” speed. High ms = slow network or busy machine, not FPS." />
               </CardTitle>
               <CardDescription>
                 Time for this app to run a tiny command over SSH to your instance. This is not in-game player ping.
@@ -87,7 +87,7 @@ export function DiagnosticsClient() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               Machine details
-              <Hint label="Kernel string, uptime, root disk, load average, and tmux session list from the remote shell." />
+              <Hint label="Basics from the server: OS version, uptime, disk space, how hard the CPU is working, and your background sessions." />
             </CardTitle>
             <CardDescription>OS name, uptime, disk space, how busy the CPU is, background sessions</CardDescription>
           </CardHeader>
@@ -125,7 +125,7 @@ export function DiagnosticsClient() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               Memory &amp; programs
-              <Hint label="Output of `free -m` and `pgrep` for Reforger-related processes—same signals the Home dashboard uses." />
+              <Hint label="RAM usage and whether we see Reforger-related processes—same idea as the Home dashboard." />
             </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
@@ -144,7 +144,7 @@ export function DiagnosticsClient() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               Open network ports (sample)
-              <Hint label="Combined stderr/stdout from the ss-based port check on the host; see Home for the game port in context." />
+              <Hint label="What network ports the machine thinks are open—good for firewall checks. Match the game port with what Home shows." />
             </CardTitle>
             <CardDescription>What the server reports is listening—useful for firewall or port issues</CardDescription>
           </CardHeader>

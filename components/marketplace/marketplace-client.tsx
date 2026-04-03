@@ -423,11 +423,10 @@ export function MarketplaceClient() {
               <div>
                 <div className="flex items-center gap-1.5">
                   <h2 className="text-base font-semibold tracking-tight">Search catalog</h2>
-                  <Hint label="Results come from the official Reforger Workshop site via this app’s server (not your browser). Rate limits and HTML changes on Bohemia’s side can affect search." />
+                  <Hint label="We search the official Workshop through this website’s backend (not straight from your browser). If search acts weird, Bohemia’s site or rate limits are usually why." />
                 </div>
                 <p className="text-[11px] text-muted-foreground">Press <kbd className="rounded border border-border/80 bg-muted/50 px-1 font-mono text-[10px]">/</kbd> to focus</p>
               </div>
-              <Hint label="Search is executed on this app’s server; your browser does not call the workshop API directly." />
             </div>
 
             <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
@@ -813,7 +812,7 @@ export function MarketplaceClient() {
           <Card className="rounded-2xl border-primary/15 bg-card/80 shadow-sm ring-1 ring-primary/10">
             <CardHeader className="space-y-1 pb-3">
               <CardTitle className="text-base">
-                <TitleWithHint hint="Ordered list written to game.mods on Save—identical data to the Mods page. Drag to reorder; Restore reloads from the server file.">
+                <TitleWithHint hint="This is your mod load order—the same list as the Mods page. When you save, it goes into your server config. Drag rows to reorder; Restore pulls what’s on the server right now.">
                   Server stack
                 </TitleWithHint>
               </CardTitle>

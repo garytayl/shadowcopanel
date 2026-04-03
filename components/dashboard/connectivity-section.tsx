@@ -155,7 +155,7 @@ export function ConnectivitySection({
           <div className="flex items-center gap-2">
             <Network className="size-4 text-primary" aria-hidden />
             <h3 className="text-sm font-semibold tracking-tight">Latency & connectivity</h3>
-            <Hint label="Control link is panel→server SSH time. Game ports show listening state from ss, not UDP RTT. True in-game ping is not measured here." />
+            <Hint label="“Control” time is how snappy our login to your machine is—not your in-game ping. Port rows show whether the OS sees a socket open, not a real UDP speed test." />
           </div>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
             Honest labels: control round-trip vs socket visibility — not player ping.
@@ -198,7 +198,7 @@ export function ConnectivitySection({
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Control round-trip
                   </span>
-                  <Hint label="Includes SSH session setup and remote command execution. This is control-plane latency from this app to your instance — not in-game player ping." />
+                  <Hint label="Time to log in and run one small command—how “far” this app feels from your server. Not the same as player ping in-game." />
                 </div>
                 <p className="mt-0.5 text-[10px] text-muted-foreground/90">SSH command RTT · control link latency</p>
               </div>
@@ -286,7 +286,7 @@ export function ConnectivitySection({
             <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               <Activity className="size-3.5 text-primary/90" aria-hidden />
               Game port visibility
-              <Hint label="Parsed from ss -tuanp (all states). UDP often shows UNCONN, not LISTEN — both count as bound here. Not a packet RTT test." />
+              <Hint label="We read what the OS reports for those ports. UDP often looks “unconnected” even when it’s fine—that still counts as open here. This isn’t measuring packet speed." />
             </div>
             <div className="flex flex-wrap gap-3">
               {(snap?.portChecks ?? []).map((p) => (
@@ -318,7 +318,7 @@ export function ConnectivitySection({
             <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               <Activity className="size-3.5 text-primary/90" aria-hidden />
               Server load context
-              <Hint label="Snapshot from the last refresh." />
+              <Hint label="Numbers from the last time this page updated—same refresh as the rest of Home." />
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
@@ -365,7 +365,7 @@ export function ConnectivitySection({
               <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 <Shield className="size-3.5 text-primary/90" aria-hidden />
                 Joinability (heuristic)
-                <Hint label="Combines process, tmux, ports, and config IP vs panel host. Run full check for log scan." />
+                <Hint label="Our best guess from: is the game running, are ports open, does the public IP match what we use. Use “Joinability check” for a deeper pass including logs." />
               </div>
               {displayJoin ? <JoinBadge overall={displayJoin.overall} /> : null}
             </div>

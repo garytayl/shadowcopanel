@@ -176,7 +176,7 @@ export function ModsManager() {
       <Card className="rounded-2xl border-border/80">
         <CardHeader>
           <CardTitle className="text-base">
-            <TitleWithHint hint="Order matters: mods load top-to-bottom. The server JSON stores only modId, name, and version under game.mods.">
+            <TitleWithHint hint="Top loads first, bottom loads last. We only save each mod’s ID, name, and version into your server file—that’s what Reforger expects.">
               Mods
             </TitleWithHint>
           </CardTitle>
@@ -192,31 +192,31 @@ export function ModsManager() {
                 <TableHead className="w-[28%]">
                   <span className="inline-flex items-center gap-1">
                     modId
-                    <Hint label="Workshop asset ID (GUID). Must match the mod you published or subscribed to." />
+                    <Hint label="The mod’s Workshop ID (long GUID)—must match the mod on Steam." />
                   </span>
                 </TableHead>
                 <TableHead className="w-[22%]">
                   <span className="inline-flex items-center gap-1">
                     name
-                    <Hint label="Human-readable title; must be non-empty for a row to save to the server." />
+                    <Hint label="Display name for you and the file—can’t be empty or we won’t save the row." />
                   </span>
                 </TableHead>
                 <TableHead className="w-[14%]">
                   <span className="inline-flex items-center gap-1">
                     version
-                    <Hint label="Workshop version string for this mod pin. Required for save validation." />
+                    <Hint label="Exact version string from the Workshop page for this mod—required so the server loads the right build." />
                   </span>
                 </TableHead>
                 <TableHead>
                   <span className="inline-flex items-center gap-1">
                     enabled
-                    <Hint label="Off = row kept in the panel but not written to game.mods (mod won’t load)." />
+                    <Hint label="Off = we keep the row here but don’t put it in the saved list, so the mod won’t load." />
                   </span>
                 </TableHead>
                 <TableHead className="text-right">
                   <span className="inline-flex items-center justify-end gap-1">
                     order / remove
-                    <Hint label="Load order: first row loads first. Delete removes the row from your next save." />
+                    <Hint label="Move up/down to change load order. Trash removes the mod from your next save." />
                   </span>
                 </TableHead>
               </TableRow>
@@ -327,7 +327,7 @@ export function ModsManager() {
         <Card className="rounded-2xl border-border/80">
           <CardHeader>
             <CardTitle className="text-base">
-              <TitleWithHint hint="What will be written under game.mods for enabled rows. Disabled rows are omitted entirely.">
+              <TitleWithHint hint="What actually gets saved for enabled mods. Turned-off mods don’t appear here at all.">
                 JSON preview (mods block)
               </TitleWithHint>
             </CardTitle>
