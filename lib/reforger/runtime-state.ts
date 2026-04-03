@@ -282,6 +282,9 @@ export function deriveHeroRuntimeVisual(
     return { headline: "READY", subline: rs.message, tone: "green" };
   }
   if (rs.state === "warning") {
+    if (rs.title === "Not joinable") {
+      return { headline: "NOT JOINABLE", subline: rs.message, tone: "amber" };
+    }
     return { headline: "RUNNING", subline: rs.message, tone: "amber" };
   }
   if (rs.state === "failed") {

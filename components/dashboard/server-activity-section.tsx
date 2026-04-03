@@ -8,6 +8,7 @@ import { listActivityEventsAction } from "@/lib/actions/activity";
 import type { ServerActivitySnapshot } from "@/lib/actions/dashboard";
 import type { ActivityEvent } from "@/lib/activity/types";
 import type { RuntimeEvent } from "@/lib/reforger/runtime-events";
+import type { RuntimeTruthResult } from "@/lib/reforger/runtime-truth";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,7 @@ type MergedRow =
 
 export function ServerActivitySection({
   serverActivity,
+  runtimeTruth,
   checkPort,
   loading,
   refreshTick,
@@ -55,6 +57,7 @@ export function ServerActivitySection({
   a2sPortBound,
 }: {
   serverActivity: ServerActivitySnapshot | undefined;
+  runtimeTruth: RuntimeTruthResult | undefined;
   checkPort: number;
   loading: boolean;
   refreshTick: number;
@@ -136,6 +139,66 @@ export function ServerActivitySection({
         </div>
 
         <p className="text-sm leading-relaxed text-muted-foreground">{st.message}</p>
+
+        {runtimeTruth ? (
+          <div className="space-y-2 rounded-xl border border-border/50 bg-muted/10 p-3">
+            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="font-semibold uppercase tracking-wide text-muted-foreground">Runtime truth</span>
+              <Badge variant="outline" className="font-normal">
+                Startup: {runtimeTruth.startupState}
+              </Badge>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "font-normal",
+                  runtimeTruth.joinability === "likely_joinable"
+                    ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-300"
+                    : runtimeTruth.joinability === "not_joinable"
+                      ? "border-red-500/40 text-red-700 dark:text-red-300"
+                      : "border-border text-muted-foreground",
+                )}
+              >
+                Joinability: {runtimeTruth.joinability.replace(/_/g, " ")}
+              </Badge>
+            </div>
+            {(runtimeTruth.advertisedAddress || runtimeTruth.expectedPublicAddress) && (
+              <p className="text-[11px] text-muted-foreground">
+                {runtimeTruth.advertisedAddress ? (
+                  <>
+                    <span className="font-medium text-foreground">Log registration: </span>
+                    {runtimeTruth.advertisedAddress}
+                  </>
+                ) : null}
+                {runtimeTruth.expectedPublicAddress ? (
+                  <>
+                    {runtimeTruth.advertisedAddress ? " · " : null}
+                    <span className="font-medium text-foreground">config publicAddress: </span>
+                    {runtimeTruth.expectedPublicAddress}
+                  </>
+                ) : null}
+              </p>
+            )}
+            <ul className="max-h-40 space-y-1 overflow-y-auto text-[11px]">
+              {runtimeTruth.findings.map((f) => (
+                <li
+                  key={f.key}
+                  className={cn(
+                    "flex gap-2 rounded-lg border px-2 py-1.5",
+                    f.status === "fail"
+                      ? "border-red-500/35 bg-red-500/10 text-red-100"
+                      : f.status === "warn"
+                        ? "border-amber-500/30 bg-amber-500/10 text-amber-100"
+                        : "border-border/40 bg-background/20 text-muted-foreground",
+                  )}
+                >
+                  <span className="shrink-0 font-mono text-[10px] uppercase opacity-80">{f.status}</span>
+                  <span>{f.message}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-[11px] font-medium text-foreground">{runtimeTruth.summary}</p>
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap gap-2">
           <Chip ok={processRunning} label="Process" />

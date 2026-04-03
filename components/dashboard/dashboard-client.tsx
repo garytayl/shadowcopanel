@@ -106,6 +106,7 @@ function safeDashboardExport(snap: DashboardSnapshot) {
     healthScore: snap.healthScore,
     cpuCores: snap.cpuCores,
     serverActivity: snap.serverActivity,
+    runtimeTruth: snap.runtimeTruth,
   };
 }
 
@@ -640,6 +641,7 @@ export function DashboardClient() {
 
       <ServerActivitySection
         serverActivity={snap?.serverActivity}
+        runtimeTruth={snap?.runtimeTruth}
         checkPort={checkPort}
         loading={loading}
         refreshTick={refreshTick}
