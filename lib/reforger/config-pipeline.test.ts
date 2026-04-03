@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { normalizeReforgerConfig, uiModsToServerEntries } from "@/lib/reforger/config-normalize";
-import { validateReforgerConfigForWrite } from "@/lib/reforger/config-validate";
+import { applyFixServerDefaults } from "@/lib/reforger/fix-server-defaults";
+import {
+  validateReforgerConfigForFixServer,
+  validateReforgerConfigForWrite,
+} from "@/lib/reforger/config-validate";
 import { applyModsMutation } from "@/lib/reforger/mods";
 import type { ReforgerConfig } from "@/lib/types/reforger-config";
 
@@ -54,6 +58,53 @@ describe("normalizeReforgerConfig", () => {
     expect(m?.source).toBeUndefined();
     expect(m?.enabled).toBeUndefined();
     expect(issues.some((i) => i.message.includes("unsupported"))).toBe(true);
+  });
+});
+
+describe("applyFixServerDefaults", () => {
+  it("fills missing bind and public fields", () => {
+    const raw = { game: { mods: [] } } as ReforgerConfig;
+    const n = normalizeReforgerConfig(raw);
+    const { config, filled } = applyFixServerDefaults(n.config, {
+      publicHostHint: "203.0.113.10",
+      defaultBindPort: 2001,
+    });
+    expect(config.bindAddress).toBe("0.0.0.0");
+    expect(config.bindPort).toBe(2001);
+    expect(config.publicAddress).toBe("203.0.113.10");
+    expect(config.publicPort).toBe(2001);
+    expect(filled.length).toBeGreaterThan(0);
+  });
+});
+
+describe("validateReforgerConfigForFixServer", () => {
+  it("accepts normalized config with defaults", () => {
+    const raw = {
+      game: { mods: [{ modId: "a", name: "n", version: "1" }] },
+    } as ReforgerConfig;
+    const n = normalizeReforgerConfig(raw);
+    const { config } = applyFixServerDefaults(n.config, {
+      publicHostHint: "203.0.113.10",
+      defaultBindPort: 2001,
+    });
+    const v = validateReforgerConfigForFixServer(config);
+    expect(v.ok).toBe(true);
+  });
+
+  it("rejects missing public when SSH hint empty", () => {
+    const raw = {
+      bindAddress: "0.0.0.0",
+      bindPort: 2001,
+      publicPort: 2001,
+      game: { mods: [{ modId: "a", name: "n", version: "1" }] },
+    } as ReforgerConfig;
+    const n = normalizeReforgerConfig(raw);
+    const { config } = applyFixServerDefaults(n.config, {
+      publicHostHint: "   ",
+      defaultBindPort: 2001,
+    });
+    const v = validateReforgerConfigForFixServer(config);
+    expect(v.ok).toBe(false);
   });
 });
 

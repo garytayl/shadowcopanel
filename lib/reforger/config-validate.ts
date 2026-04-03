@@ -62,3 +62,37 @@ export function validateReforgerConfigForWrite(config: ReforgerConfig): Validati
 
   return { ok: issues.length === 0, issues };
 }
+
+/**
+ * After `normalizeReforgerConfig` + `applyFixServerDefaults`, ensure network fields are usable.
+ */
+export function validateReforgerConfigForFixServer(config: ReforgerConfig): ValidationResult {
+  const base = validateReforgerConfigForWrite(config);
+  if (!base.ok) return base;
+  const issues: ValidationIssue[] = [];
+
+  const bind = typeof config.bindAddress === "string" ? config.bindAddress.trim() : "";
+  if (!bind) {
+    issues.push({ path: "bindAddress", message: "bindAddress is required after repair defaults." });
+  }
+
+  const bp = config.bindPort;
+  if (typeof bp !== "number" || !Number.isFinite(bp) || bp < 1 || bp > 65535) {
+    issues.push({ path: "bindPort", message: "bindPort must be a valid port number (1–65535)." });
+  }
+
+  const pub = typeof config.publicAddress === "string" ? config.publicAddress.trim() : "";
+  if (!pub) {
+    issues.push({
+      path: "publicAddress",
+      message: "publicAddress is required (set in config or REFORGER_SSH_HOST).",
+    });
+  }
+
+  const pp = config.publicPort;
+  if (typeof pp !== "number" || !Number.isFinite(pp) || pp < 1 || pp > 65535) {
+    issues.push({ path: "publicPort", message: "publicPort must be a valid port number (1–65535)." });
+  }
+
+  return { ok: issues.length === 0, issues };
+}

@@ -19,6 +19,7 @@ import {
   Server,
   Timer,
   Users,
+  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,6 +33,8 @@ import {
   fetchDashboardSnapshot,
   type DashboardSnapshot,
 } from "@/lib/actions/dashboard";
+import { actionFixServer } from "@/lib/actions/fix-server";
+import type { FixServerResult } from "@/lib/types/fix-server";
 import {
   actionRunJoinabilityCheck,
   actionSyncPublicAddressToPanelHost,
@@ -57,6 +60,7 @@ import { cn } from "@/lib/utils";
 
 const AUTO_REFRESH_KEY = "reforger-dashboard-auto-refresh";
 const STICKY_NOTES_KEY = "reforger-dashboard-sticky-notes";
+const LAST_FIX_KEY = "reforger-dashboard-last-fix";
 
 function safeDashboardExport(snap: DashboardSnapshot) {
   const { privateKeyPath: _pk, ...settingsRest } = snap.settings;
@@ -133,6 +137,7 @@ export function DashboardClient() {
   const [joinResult, setJoinResult] = useState<JoinabilityResult | null>(null);
   const [joinLoading, setJoinLoading] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
+  const [lastFix, setLastFix] = useState<FixServerResult | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -179,6 +184,12 @@ export function DashboardClient() {
       /* ignore */
     }
     setLatencyHistory(readControlLinkHistory());
+    try {
+      const raw = localStorage.getItem(LAST_FIX_KEY);
+      if (raw) setLastFix(JSON.parse(raw) as FixServerResult);
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   useEffect(() => {
@@ -199,6 +210,36 @@ export function DashboardClient() {
     const id = window.setInterval(() => void refresh(), 30_000);
     return () => window.clearInterval(id);
   }, [autoRefresh, refresh]);
+
+  async function runFixServerAction() {
+    setActionKey("fix");
+    try {
+      const r = await actionFixServer();
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      const data = r.data;
+      setLastFix(data);
+      try {
+        localStorage.setItem(LAST_FIX_KEY, JSON.stringify(data));
+      } catch {
+        /* ignore */
+      }
+      if (data.level === "failure" || !data.success) {
+        toast.error(data.summary);
+      } else if (data.level === "warning") {
+        toast.message(data.summary, {
+          description: "Open “Last repair” below for step details.",
+        });
+      } else {
+        toast.success(data.summary);
+      }
+      await refresh();
+    } finally {
+      setActionKey(null);
+    }
+  }
 
   async function run(
     key: string,
@@ -517,8 +558,91 @@ export function DashboardClient() {
           Logs
           <ArrowUpRight className="size-3.5 opacity-70" aria-hidden />
         </Link>
+        <Button
+          variant="secondary"
+          className="min-h-11 touch-manipulation sm:min-h-8"
+          onClick={() => void runFixServerAction()}
+          disabled={!!actionKey || !s?.configured}
+        >
+          {actionKey === "fix" ? (
+            <Loader2 className="mr-2 size-4 animate-spin" />
+          ) : (
+            <Wrench className="mr-2 size-4" aria-hidden />
+          )}
+          <span aria-hidden>🔧</span> Fix Server
+        </Button>
         </div>
+        <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Hint label="Recovery pass: checks your config first, then clears stuck game processes and the background session, saves a cleaned config (with backup), and starts the server the same way as Start. Not the same as Restart—built for messy or half-crashed states. Safe to run more than once." />
+          <span>Repair + stabilize when things feel stuck (not a plain restart).</span>
+        </p>
       </section>
+
+      {lastFix ? (
+        <details className="rounded-2xl border border-border/70 bg-muted/10 px-4 py-3 open:bg-muted/15">
+          <summary className="cursor-pointer list-none text-sm font-medium [&::-webkit-details-marker]:hidden">
+            Last repair ·{" "}
+            <span
+              className={
+                lastFix.level === "success"
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : lastFix.level === "warning"
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-destructive"
+              }
+            >
+              {lastFix.summary}
+            </span>
+          </summary>
+          <div className="mt-3 space-y-3 text-xs">
+            {lastFix.whatWasFixed && lastFix.whatWasFixed.length > 0 ? (
+              <div>
+                <p className="mb-1 font-medium text-foreground">What changed</p>
+                <ul className="list-inside list-disc text-muted-foreground">
+                  {lastFix.whatWasFixed.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <div>
+              <p className="mb-1 font-medium text-foreground">Steps</p>
+              <ul className="space-y-1">
+                {lastFix.steps.map((st, i) => (
+                  <li
+                    key={`${st.step}-${i}`}
+                    className="flex flex-wrap gap-2 border-b border-border/40 py-1 last:border-0"
+                  >
+                    <span
+                      className={
+                        st.status === "ok"
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : st.status === "warn"
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-destructive"
+                      }
+                    >
+                      [{st.status}]
+                    </span>
+                    <span className="font-medium text-foreground">{st.step}</span>
+                    {st.message ? (
+                      <span className="text-muted-foreground">{st.message}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <p className="font-mono text-[10px] text-muted-foreground">
+              Processes: {lastFix.diagnostics.processesFound} found · cleaned:{" "}
+              {lastFix.diagnostics.processesCleaned ? "yes" : "no"} · tmux reset:{" "}
+              {lastFix.diagnostics.tmuxReset ? "yes" : "no"} · enfMain:{" "}
+              {lastFix.diagnostics.processRunning ? "yes" : "no"} · UDP ports:{" "}
+              {lastFix.diagnostics.portsOpen ? "yes" : "no"} · tmux session:{" "}
+              {lastFix.diagnostics.tmuxSessionPresent ? "yes" : "no"}
+            </p>
+          </div>
+        </details>
+      ) : null}
 
       {/* Diagnostics strip */}
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
