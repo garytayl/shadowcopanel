@@ -9,15 +9,17 @@ export default function PanelTemplate({ children }: { children: React.ReactNode 
 
   const t = reduce
     ? { duration: 0.12 }
-    : { duration: 0.42, ease: [0.22, 1, 0.36, 1] as const };
+    : { duration: 0.45, ease: [0.16, 1, 0.3, 1] as const };
 
   return (
     <AnimatePresence mode="wait">
       <motion.div
         key={pathname}
-        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14, filter: "blur(6px)" }}
-        animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0, filter: "blur(0px)" }}
-        exit={reduce ? { opacity: 0 } : { opacity: 0, y: -10, filter: "blur(4px)" }}
+        initial={
+          reduce ? { opacity: 0 } : { opacity: 0, y: 18, scale: 0.985, filter: "blur(8px)" }
+        }
+        animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+        exit={reduce ? { opacity: 0 } : { opacity: 0, y: -12, scale: 0.99, filter: "blur(5px)" }}
         transition={t}
         className="will-change-[opacity,transform,filter] motion-reduce:transform-none motion-reduce:filter-none"
       >

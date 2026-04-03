@@ -113,7 +113,7 @@ function NavList({
 export function Sidebar() {
   return (
     <>
-      <aside className="hidden w-56 shrink-0 border-r border-border/60 bg-sidebar/95 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/80 lg:block">
+      <aside className="hidden w-56 shrink-0 border-r border-primary/15 bg-sidebar/90 shadow-[4px_0_32px_-8px_rgba(0,0,0,0.45)] backdrop-blur-xl supports-[backdrop-filter]:bg-sidebar/75 lg:block">
         <div className="flex h-14 items-center justify-between gap-2 border-b border-border/60 px-3">
           <motion.div
             initial={{ opacity: 0, y: -6 }}

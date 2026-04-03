@@ -13,11 +13,14 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
         <div className="app-bg-grid absolute inset-0" />
         <div className="app-bg-scanline absolute inset-0 hidden md:block" />
         <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-transparent to-background dark:from-background/60" />
+        <div className="app-noise absolute inset-0 hidden md:block" />
       </div>
       <GlobalAppChrome />
       <Sidebar />
       <div className="relative flex min-h-0 flex-1 flex-col">
-        <main className="relative flex-1 p-4 md:p-6 lg:p-8">{children}</main>
+        <main className="app-main-frame relative flex-1 p-4 md:p-6 lg:p-8 lg:pl-6 xl:p-10">
+          {children}
+        </main>
         <AppFooter />
       </div>
     </div>
