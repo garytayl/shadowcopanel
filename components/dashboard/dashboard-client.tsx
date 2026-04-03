@@ -74,7 +74,13 @@ import {
 } from "@/components/dashboard/latency-sparkline";
 import { PowerOrb, type PowerOrbPhase } from "@/components/dashboard/power-orb";
 import { parseDfRootLine, parseFreeMemM, parseLoad1m } from "@/lib/utils/dashboard-metrics";
-import { RUNTIME_FAST_POLL_STATES } from "@/lib/reforger/runtime-state";
+import {
+  deriveHeroRuntimeVisual,
+  RUNTIME_FAST_POLL_STATES,
+  runtimeStateToStartupStep,
+  type HeroRuntimeTone,
+  type RuntimeState,
+} from "@/lib/reforger/runtime-state";
 import { cn } from "@/lib/utils";
 
 const AUTO_REFRESH_KEY = "reforger-dashboard-auto-refresh";
@@ -130,6 +136,52 @@ function derivePhase(
   if (st.serverLikelyUp) return "running";
   if (st.tmuxSessionExists || st.processRunning) return "degraded";
   return "stopped";
+}
+
+function shouldShowStartupLadder(state: RuntimeState): boolean {
+  return (
+    state === "starting" ||
+    state === "loading_config" ||
+    state === "compiling_scripts" ||
+    state === "loading_world" ||
+    state === "binding_network" ||
+    state === "ready" ||
+    state === "warning"
+  );
+}
+
+function StartupLadder({ runtimeState }: { runtimeState: RuntimeState }) {
+  const step = runtimeStateToStartupStep(runtimeState);
+  if (step < 0) return null;
+  const labels = ["Config", "Scripts", "World", "UDP ports", "Ready"];
+  return (
+    <div className="mt-5 w-full max-w-xl">
+      <p className="mb-2 text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+        Startup progress
+      </p>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {labels.map((label, i) => {
+          const done = step >= 5 ? true : i <= step;
+          const current = step >= 5 ? false : i === step;
+          return (
+            <span
+              key={label}
+              className={cn(
+                "rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors",
+                done
+                  ? "border-emerald-500/45 bg-emerald-500/15 text-emerald-200"
+                  : current
+                    ? "border-sky-500/60 bg-sky-500/15 text-sky-200 ring-1 ring-sky-500/35"
+                    : "border-border/50 bg-muted/15 text-muted-foreground",
+              )}
+            >
+              {label}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function MetricTile({
@@ -270,13 +322,13 @@ export function DashboardClient() {
     return () => window.clearInterval(id);
   }, [autoRefresh, refresh]);
 
-  /** Faster polling while the classifier thinks the server is still converging (startup). */
+  /** Faster polling during startup so phase/ready updates without turning on 30s auto-refresh. */
   useEffect(() => {
     const rs = snap?.serverActivity?.state?.state;
-    if (!rs || !autoRefresh || !RUNTIME_FAST_POLL_STATES.has(rs)) return;
+    if (!rs || !RUNTIME_FAST_POLL_STATES.has(rs)) return;
     const id = window.setInterval(() => void refresh(), 5000);
     return () => window.clearInterval(id);
-  }, [snap?.serverActivity?.state?.state, autoRefresh, refresh]);
+  }, [snap?.serverActivity?.state?.state, refresh]);
 
   async function runSafeRestartAction() {
     setActionKey("safe-restart");
@@ -438,6 +490,16 @@ export function DashboardClient() {
     [loading, snap, st],
   );
 
+  const heroVisual = useMemo(
+    () =>
+      deriveHeroRuntimeVisual(
+        snap?.serverActivity?.state,
+        statusDisplay.headline,
+        statusDisplay.tone as HeroRuntimeTone,
+      ),
+    [snap?.serverActivity?.state, statusDisplay.headline, statusDisplay.tone],
+  );
+
   const powerActionLabel =
     phase === "running"
       ? "Stop server"
@@ -447,14 +509,16 @@ export function DashboardClient() {
           ? "Restart server"
           : undefined;
 
-  const statusHeadlineClass =
-    statusDisplay.tone === "green"
+  const heroHeadlineClass =
+    heroVisual.tone === "green"
       ? "text-emerald-400 drop-shadow-[0_0_28px_rgba(52,211,153,0.4)]"
-      : statusDisplay.tone === "red"
+      : heroVisual.tone === "red"
         ? "text-red-400 drop-shadow-[0_0_22px_rgba(248,113,113,0.3)]"
-        : statusDisplay.tone === "amber"
+        : heroVisual.tone === "amber"
           ? "text-amber-400 drop-shadow-[0_0_22px_rgba(251,191,36,0.3)]"
-          : "text-muted-foreground";
+          : heroVisual.tone === "primary"
+            ? "text-sky-400 drop-shadow-[0_0_26px_rgba(56,189,248,0.38)]"
+            : "text-muted-foreground";
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -534,11 +598,20 @@ export function DashboardClient() {
               <p
                 className={cn(
                   "mt-2 font-mono text-4xl font-black tracking-tight sm:text-5xl md:text-6xl",
-                  statusHeadlineClass,
+                  heroHeadlineClass,
                 )}
               >
-                {statusDisplay.headline}
+                {heroVisual.headline}
               </p>
+              {heroVisual.subline ? (
+                <p className="mx-auto mt-3 max-w-lg px-2 text-sm leading-relaxed text-muted-foreground">
+                  {heroVisual.subline}
+                </p>
+              ) : null}
+              {snap?.serverActivity?.state &&
+              shouldShowStartupLadder(snap.serverActivity.state.state) ? (
+                <StartupLadder runtimeState={snap.serverActivity.state.state} />
+              ) : null}
             </div>
 
             <PowerOrb
@@ -565,13 +638,6 @@ export function DashboardClient() {
         </div>
       </section>
 
-      <HealthScoreCard
-        healthScore={snap?.healthScore}
-        loading={loading}
-        refreshTick={refreshTick}
-        variant="dashboard"
-      />
-
       <ServerActivitySection
         serverActivity={snap?.serverActivity}
         checkPort={checkPort}
@@ -581,6 +647,13 @@ export function DashboardClient() {
         tmuxActive={st?.tmuxSessionExists ?? false}
         gamePortBound={gamePortBound ?? false}
         a2sPortBound={a2sPortBound ?? false}
+      />
+
+      <HealthScoreCard
+        healthScore={snap?.healthScore}
+        loading={loading}
+        refreshTick={refreshTick}
+        variant="dashboard"
       />
 
       {modStackValidation && modStackValidation.issues.length > 0 ? (

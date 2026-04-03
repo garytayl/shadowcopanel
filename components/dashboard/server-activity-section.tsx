@@ -116,7 +116,7 @@ export function ServerActivitySection({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <Activity className="size-4 text-primary" aria-hidden />
-            <h3 className="text-sm font-semibold tracking-tight">Server activity</h3>
+            <h3 className="text-sm font-semibold tracking-tight">What the server is doing</h3>
             <Badge variant="outline" className={cn("font-semibold", stateBadgeClass(st.state))}>
               {st.title}
             </Badge>

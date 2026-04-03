@@ -43,23 +43,30 @@ function lastLogPhase(tail: string): RuntimeState | null {
     const line = lines[i]!;
     if (/obsolete|deprecated.*script/i.test(line) && !/error|fail|fatal/i.test(line)) continue;
 
+    // World / mission / map (Enfusion / Reforger–style wording)
     if (
-      /\b(CreateEntities|LoadEntities|loading.*entities|world.*load|Load world|Streaming.*world)\b/i.test(
+      /\b(CreateEntities|LoadEntities|LoadMap|WorldController|loading.*entities|world.*load|Load world|Streaming.*world|mission.*load|scenario|prefab.*stream|terrain)\b/i.test(
         line,
       )
     ) {
       return "loading_world";
     }
-    if (/\b(Compiling.*script|Game scripts|script compilation|compiling game)\b/i.test(line)) {
+    if (
+      /\b(Compiling.*script|Game scripts|script compilation|compiling game|EnforceScript|workshop.*compile)\b/i.test(
+        line,
+      )
+    ) {
       return "compiling_scripts";
     }
     if (
-      /\b(loading.*config|dedicated server config|server\.json|config.*loaded|Load.*config)\b/i.test(line)
+      /\b(loading.*config|dedicated server|server\.json|config.*loaded|Load.*config|Backend.*config|GameSettings)\b/i.test(
+        line,
+      )
     ) {
       return "loading_config";
     }
     if (
-      /\b(RPL|replication.*server|Starting.*network|network.*bind|Game.*network|A2S|query.*port)\b/i.test(
+      /\b(RPL|replication.*server|Starting.*network|network.*bind|Game.*network|A2S|query.*port|Networking|Socket|listening.*UDP|Steam.*socket)\b/i.test(
         line,
       ) ||
       new RegExp(`:${String(17777)}\\b`).test(line)
@@ -71,7 +78,7 @@ function lastLogPhase(tail: string): RuntimeState | null {
 }
 
 function hasReadyHint(tail: string): boolean {
-  return /\b(server ready|ready to accept|Game initialized|Initialization complete|Session.*started)\b/i.test(
+  return /\b(server ready|ready to accept|Game initialized|Initialization complete|Session.*started|game is running|server.*running|listening for connections)\b/i.test(
     tail.slice(-8000),
   );
 }
@@ -182,22 +189,29 @@ export function deriveRuntimeState(input: RuntimeStateInput): RuntimeStateResult
 
   if (processRunning && tmuxActive && !bothPorts) {
     const phase = lastLogPhase(tail);
-    const base: RuntimeStateResult = {
-      state: phase ?? "starting",
-      title: phaseTitle(phase ?? "starting"),
-      message: `Game process is running; UDP :${checkPort} and :17777 are still coming online.`,
-      confidence: phase ? "medium" : "low",
-    };
-    if (phase === "binding_network" || /\b(bind|socket|UDP|17777|2001)\b/i.test(tail.slice(-4000))) {
+    const bindingHint =
+      phase === "binding_network" ||
+      /\b(bind|socket|UDP|17777|2001|listening|RPL|network)\b/i.test(tail.slice(-6000));
+    if (bindingHint) {
       return {
-        ...base,
         state: "binding_network",
-        title: "Binding network",
-        message: "Server is up; waiting for both UDP sockets to appear in the OS.",
+        title: "Binding ports",
+        message:
+          phase === "binding_network"
+            ? `Network stack activity in logs; waiting for UDP :${checkPort} and :17777 in ss.`
+            : `Process is up; game and A2S UDP ports are still binding (often 10–30s).`,
         confidence: "medium",
       };
     }
-    return base;
+    return {
+      state: phase ?? "starting",
+      title: phaseTitle(phase ?? "starting"),
+      message:
+        phase != null
+          ? `Boot phase from recent logs — UDP :${checkPort} + :17777 not visible yet.`
+          : `Process running — still loading or waiting for ports (refresh to update).`,
+      confidence: phase ? "medium" : "low",
+    };
   }
 
   if ((processRunning || tmuxActive) && !bothPorts) {
@@ -243,3 +257,94 @@ export const RUNTIME_FAST_POLL_STATES: ReadonlySet<RuntimeState> = new Set([
   "loading_world",
   "binding_network",
 ]);
+
+export type HeroRuntimeTone = "green" | "red" | "amber" | "muted" | "primary";
+
+export type HeroRuntimeVisual = {
+  headline: string;
+  subline: string;
+  tone: HeroRuntimeTone;
+};
+
+/**
+ * Map classifier output to the large hero headline + subtitle (replaces generic RUNNING during boot).
+ */
+export function deriveHeroRuntimeVisual(
+  rs: RuntimeStateResult | undefined,
+  statusHeadline: string,
+  statusTone: HeroRuntimeTone,
+): HeroRuntimeVisual {
+  if (!rs) {
+    return { headline: statusHeadline, subline: "", tone: statusTone };
+  }
+
+  if (rs.state === "ready") {
+    return { headline: "READY", subline: rs.message, tone: "green" };
+  }
+  if (rs.state === "warning") {
+    return { headline: "RUNNING", subline: rs.message, tone: "amber" };
+  }
+  if (rs.state === "failed") {
+    return { headline: "FAILED", subline: rs.message, tone: "red" };
+  }
+
+  if (
+    rs.state === "starting" ||
+    rs.state === "loading_config" ||
+    rs.state === "compiling_scripts" ||
+    rs.state === "loading_world" ||
+    rs.state === "binding_network"
+  ) {
+    return {
+      headline: runtimeStateToHeroHeadline(rs.state),
+      subline: rs.message,
+      tone: "primary",
+    };
+  }
+
+  if (rs.state === "idle") {
+    return { headline: statusHeadline, subline: rs.message, tone: statusTone };
+  }
+
+  return { headline: statusHeadline, subline: rs.message, tone: statusTone };
+}
+
+export function runtimeStateToHeroHeadline(s: RuntimeState): string {
+  switch (s) {
+    case "loading_config":
+      return "LOADING CONFIG";
+    case "compiling_scripts":
+      return "COMPILING SCRIPTS";
+    case "loading_world":
+      return "LOADING WORLD";
+    case "binding_network":
+      return "BINDING PORTS";
+    case "starting":
+      return "STARTING UP";
+    default:
+      return "STARTING UP";
+  }
+}
+
+/** 0–4 = startup ladder; 5 = ready/warn; -1 = unknown/offline */
+export function runtimeStateToStartupStep(state: RuntimeState): number {
+  switch (state) {
+    case "loading_config":
+      return 0;
+    case "compiling_scripts":
+      return 1;
+    case "loading_world":
+      return 2;
+    case "binding_network":
+      return 3;
+    case "starting":
+      return 0;
+    case "ready":
+    case "warning":
+      return 5;
+    case "failed":
+      return -1;
+    default:
+      return -1;
+  }
+}
