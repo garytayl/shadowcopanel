@@ -51,6 +51,110 @@ export async function snapshotUdpPortsBound(checkPort: number): Promise<{
   }
 }
 
+/** Process + tmux + both UDP ports (game + A2S), one snapshot. */
+export type RuntimeStateSnapshot = {
+  processRunning: boolean;
+  tmuxActive: boolean;
+  portsBound: boolean;
+};
+
+export async function snapshotRuntimeState(
+  checkPort: number,
+  session: string,
+): Promise<RuntimeStateSnapshot> {
+  const [processRunning, tmuxActive, ports] = await Promise.all([
+    probeRefogerProcessRunning(),
+    probeTmuxSession(session),
+    snapshotUdpPortsBound(checkPort),
+  ]);
+  return {
+    processRunning,
+    tmuxActive,
+    portsBound: ports.bothOk,
+  };
+}
+
+/** After `startServer`, wait briefly then poll until runtime converges or window expires. */
+export const POST_RESTART_INITIAL_DELAY_MS = 3000;
+export const POST_RESTART_RETRY_INTERVAL_MS = 2000;
+export const POST_RESTART_MAX_ATTEMPTS = 5;
+
+export type PostRestartConvergenceResult = {
+  snapshot: RuntimeStateSnapshot;
+  /** Checks performed (1–maxAttempts). */
+  attempts: number;
+  /** 1-based attempt when process+tmux+both UDP ports were all OK, or null. */
+  succeededOnAttempt: number | null;
+  /**
+   * True when the first check already had process+tmux but not both UDP ports,
+   * and a later check succeeded (typical Reforger slow bind).
+   */
+  portsBoundLate: boolean;
+};
+
+/**
+ * Bounded post-start verification: initial delay, then up to `maxAttempts` snapshots
+ * every `retryIntervalMs` using `ss -u -lpn` (UDP-aware, not TCP LISTEN).
+ */
+export async function waitForPostRestartConvergence(
+  checkPort: number,
+  session: string,
+  opts?: {
+    initialDelayMs?: number;
+    retryIntervalMs?: number;
+    maxAttempts?: number;
+  },
+): Promise<PostRestartConvergenceResult> {
+  const initialDelayMs = opts?.initialDelayMs ?? POST_RESTART_INITIAL_DELAY_MS;
+  const retryIntervalMs = opts?.retryIntervalMs ?? POST_RESTART_RETRY_INTERVAL_MS;
+  const maxAttempts = opts?.maxAttempts ?? POST_RESTART_MAX_ATTEMPTS;
+
+  await new Promise((r) => setTimeout(r, initialDelayMs));
+
+  let first: RuntimeStateSnapshot | null = null;
+  let lastSnapshot: RuntimeStateSnapshot = {
+    processRunning: false,
+    tmuxActive: false,
+    portsBound: false,
+  };
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    lastSnapshot = await snapshotRuntimeState(checkPort, session);
+    if (attempt === 1) first = lastSnapshot;
+
+    const ok =
+      lastSnapshot.processRunning &&
+      lastSnapshot.tmuxActive &&
+      lastSnapshot.portsBound;
+
+    if (ok) {
+      const portsBoundLate = Boolean(
+        attempt > 1 &&
+          first?.processRunning &&
+          first?.tmuxActive &&
+          !first?.portsBound,
+      );
+      return {
+        snapshot: lastSnapshot,
+        attempts: attempt,
+        succeededOnAttempt: attempt,
+        portsBoundLate,
+      };
+    }
+
+    if (attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, retryIntervalMs));
+    }
+  }
+
+  return {
+    snapshot: lastSnapshot,
+    attempts: maxAttempts,
+    succeededOnAttempt: null,
+    portsBoundLate: false,
+  };
+}
+
 export function parseKillPidCount(stdout: string): number {
   const m = stdout.match(/REFORGER_KILL_PCOUNT=(\d+)/m);
   if (!m) return 0;

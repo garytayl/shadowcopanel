@@ -44,6 +44,24 @@ export function SafeRestartPanel({
         </span>
       </summary>
       <div className="mt-4 space-y-4 text-xs">
+        {result.verification ? (
+          <div className="rounded-xl border border-border/60 bg-muted/15 p-3 text-muted-foreground">
+            <p className="mb-1 font-medium text-foreground">Verification</p>
+            <ul className="space-y-0.5">
+              <li>
+                Checks: {result.verification.attempts}
+                {result.verification.succeededOnAttempt != null
+                  ? ` · ready on check ${result.verification.succeededOnAttempt}`
+                  : " · window expired before full convergence"}
+              </li>
+              {result.verification.portsBoundLate ? (
+                <li className="text-emerald-700 dark:text-emerald-400/90">
+                  UDP ports bound after initial delay (normal for Reforger startup).
+                </li>
+              ) : null}
+            </ul>
+          </div>
+        ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
             <p className="mb-2 font-medium text-foreground">Before</p>

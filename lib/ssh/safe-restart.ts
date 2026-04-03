@@ -8,9 +8,8 @@ import { analyzeReforgerLogs } from "@/lib/reforger/log-analysis";
 import {
   killRefogerProcessesPgrep,
   killTmuxSessionLoose,
-  probeRefogerProcessRunning,
-  probeTmuxSession,
-  snapshotUdpPortsBound,
+  snapshotRuntimeState,
+  waitForPostRestartConvergence,
   waitUntilProcessesGone,
 } from "@/lib/ssh/orchestration";
 import {
@@ -26,24 +25,12 @@ import type {
   SafeRestartResult,
   SafeRestartStateSnapshot,
   SafeRestartStep,
+  SafeRestartVerification,
 } from "@/lib/types/safe-restart";
 import { parseConfigJson, type ReforgerConfig } from "@/lib/types/reforger-config";
 
 function push(steps: SafeRestartStep[], step: string, status: SafeRestartStep["status"], message?: string) {
   steps.push({ step, status, message });
-}
-
-async function snapshotState(checkPort: number, session: string): Promise<SafeRestartStateSnapshot> {
-  const [processRunning, tmuxActive, ports] = await Promise.all([
-    probeRefogerProcessRunning(),
-    probeTmuxSession(session),
-    snapshotUdpPortsBound(checkPort),
-  ]);
-  return {
-    processRunning,
-    tmuxActive,
-    portsBound: ports.bothOk,
-  };
 }
 
 export type SafeRestartOptions = {
@@ -89,7 +76,7 @@ export async function runSafeRestartPipeline(opts?: SafeRestartOptions): Promise
 
   let before: SafeRestartStateSnapshot = fallbackSnapshot;
   try {
-    before = await snapshotState(checkPort, session);
+    before = await snapshotRuntimeState(checkPort, session);
     push(
       steps,
       "Record pre-restart state",
@@ -220,7 +207,7 @@ export async function runSafeRestartPipeline(opts?: SafeRestartOptions): Promise
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     push(steps, "Start server (tmux)", "fail", msg);
-    const afterDead = await snapshotState(checkPort, session);
+    const afterDead = await snapshotRuntimeState(checkPort, session);
     return {
       success: false,
       level: "failure",
@@ -234,9 +221,43 @@ export async function runSafeRestartPipeline(opts?: SafeRestartOptions): Promise
     };
   }
 
-  await new Promise((r) => setTimeout(r, 3200));
+  const converge = await waitForPostRestartConvergence(checkPort, session);
+  const after: SafeRestartStateSnapshot = {
+    processRunning: converge.snapshot.processRunning,
+    tmuxActive: converge.snapshot.tmuxActive,
+    portsBound: converge.snapshot.portsBound,
+  };
 
-  const after = await snapshotState(checkPort, session);
+  const verification: SafeRestartVerification = {
+    attempts: converge.attempts,
+    succeededOnAttempt: converge.succeededOnAttempt,
+    portsBoundLate: converge.portsBoundLate,
+  };
+
+  let verifyStepStatus: SafeRestartStep["status"] = "warn";
+  let verifyMsg: string;
+  if (converge.succeededOnAttempt != null) {
+    verifyStepStatus = "ok";
+    if (converge.succeededOnAttempt === 1) {
+      verifyMsg = `OK on first check. process=${after.processRunning} · tmux=${after.tmuxActive} · UDP :${checkPort}+17777 bound`;
+    } else {
+      verifyMsg = `OK on check ${converge.succeededOnAttempt}/${converge.attempts}. process=${after.processRunning} · tmux=${after.tmuxActive} · UDP :${checkPort}+17777 bound`;
+      if (converge.portsBoundLate) {
+        verifyMsg += " (ports were slow to bind)";
+      }
+    }
+  } else if (!after.processRunning) {
+    verifyStepStatus = "fail";
+    verifyMsg = `After ${converge.attempts} check(s): process not running`;
+  } else if (!after.tmuxActive) {
+    verifyStepStatus = "fail";
+    verifyMsg = `After ${converge.attempts} check(s): tmux session not active`;
+  } else {
+    verifyStepStatus = "warn";
+    verifyMsg = `After ${converge.attempts} check(s): process+tmux OK but both UDP ports not seen (:${checkPort} + :17777)`;
+  }
+  push(steps, "Post-restart verification", verifyStepStatus, verifyMsg);
+
   let logAnalysis: LogAnalysisResult | undefined;
   try {
     const tail = await getRecentLogs(400);
@@ -268,28 +289,28 @@ export async function runSafeRestartPipeline(opts?: SafeRestartOptions): Promise
     );
   }
 
-  push(
-    steps,
-    "Verify runtime",
-    after.processRunning && after.tmuxActive && after.portsBound ? "ok" : "warn",
-    `process=${after.processRunning} · tmux=${after.tmuxActive} · UDP :${checkPort}+17777 OK=${after.portsBound}`,
-  );
-
   const detectedIssues = logAnalysis?.issues.map((i) => i.title) ?? [];
 
-  const healthy =
-    after.processRunning && after.tmuxActive && after.portsBound;
+  const fullyHealthy = converge.succeededOnAttempt != null;
   const logBad =
     logAnalysis &&
     (logAnalysis.summary.hasFatal ||
       logAnalysis.summary.highestSeverity === "critical" ||
       logAnalysis.summary.highestSeverity === "error");
 
-  if (healthy && !logBad) {
+  if (fullyHealthy && !logBad) {
+    let summary = "Restart completed — server looks healthy.";
+    if (converge.succeededOnAttempt != null && converge.succeededOnAttempt > 1) {
+      if (converge.portsBoundLate) {
+        summary = `Server restarted successfully; ports became ready after ${converge.succeededOnAttempt} checks.`;
+      } else {
+        summary = `Server restarted successfully; runtime became ready after ${converge.succeededOnAttempt} checks.`;
+      }
+    }
     return {
       success: true,
       level: "success",
-      summary: "Restart completed — server looks healthy.",
+      summary,
       steps,
       before,
       after,
@@ -298,6 +319,7 @@ export async function runSafeRestartPipeline(opts?: SafeRestartOptions): Promise
       detectedIssues: detectedIssues.length ? detectedIssues : undefined,
       logAnalysis,
       reason,
+      verification,
     };
   }
 
@@ -305,7 +327,7 @@ export async function runSafeRestartPipeline(opts?: SafeRestartOptions): Promise
     return {
       success: false,
       level: "failure",
-      summary: "Restart failed — process not detected after start.",
+      summary: "Restart failed — process not detected after verification window.",
       steps,
       before,
       after,
@@ -314,6 +336,43 @@ export async function runSafeRestartPipeline(opts?: SafeRestartOptions): Promise
       detectedIssues: detectedIssues.length ? detectedIssues : undefined,
       logAnalysis,
       reason,
+      verification,
+    };
+  }
+
+  if (!after.tmuxActive) {
+    return {
+      success: false,
+      level: "failure",
+      summary: "Restart failed — tmux session not active after verification window.",
+      steps,
+      before,
+      after,
+      configRepaired,
+      normalizationNotes: normalizationNotes.length ? normalizationNotes : undefined,
+      detectedIssues: detectedIssues.length ? detectedIssues : undefined,
+      logAnalysis,
+      reason,
+      verification,
+    };
+  }
+
+  if (!after.portsBound) {
+    return {
+      success: true,
+      level: "warning",
+      summary:
+        `Restarted — both UDP ports were not bound after ${converge.attempts} check(s). ` +
+        `If the server is still starting, refresh Home in a moment.`,
+      steps,
+      before,
+      after,
+      configRepaired,
+      normalizationNotes: normalizationNotes.length ? normalizationNotes : undefined,
+      detectedIssues: detectedIssues.length ? detectedIssues : undefined,
+      logAnalysis,
+      reason,
+      verification,
     };
   }
 
@@ -322,7 +381,7 @@ export async function runSafeRestartPipeline(opts?: SafeRestartOptions): Promise
     level: "warning",
     summary: logBad
       ? "Restarted, but logs show errors — check diagnostics."
-      : "Restarted, but some checks are yellow (ports or tmux).",
+      : "Restarted, but some checks need attention.",
     steps,
     before,
     after,
@@ -331,6 +390,7 @@ export async function runSafeRestartPipeline(opts?: SafeRestartOptions): Promise
     detectedIssues: detectedIssues.length ? detectedIssues : undefined,
     logAnalysis,
     reason,
+    verification,
   };
 }
 

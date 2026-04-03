@@ -21,6 +21,16 @@ export type SafeRestartStateSnapshot = {
 
 export type SafeRestartLevel = "success" | "warning" | "failure";
 
+/** Bounded post-restart checks (process + tmux + UDP ports via `ss -u -lpn`). */
+export type SafeRestartVerification = {
+  /** How many snapshots were taken in the convergence window. */
+  attempts: number;
+  /** 1-based attempt when process+tmux+both UDP ports were OK, or null if the window expired first. */
+  succeededOnAttempt: number | null;
+  /** First snapshot had process+tmux but not both UDP ports; ports appeared on a later attempt. */
+  portsBoundLate: boolean;
+};
+
 export type SafeRestartResult = {
   success: boolean;
   level: SafeRestartLevel;
@@ -36,4 +46,6 @@ export type SafeRestartResult = {
   detectedIssues?: string[];
   logAnalysis?: LogAnalysisResult;
   reason?: SafeRestartReason;
+  /** Present after start + post-restart convergence (retry window for UDP bind). */
+  verification?: SafeRestartVerification;
 };
