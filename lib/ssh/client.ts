@@ -163,19 +163,20 @@ export async function sshReadFile(remotePath: string): Promise<string> {
 }
 
 /**
- * Test SSH connectivity without throwing on command failure.
+ * Measure panel/backend → EC2 control-plane round-trip over SSH (echo + exec).
+ * This is **not** in-game player latency.
  */
-export async function sshPing(): Promise<
-  { ok: true; latencyMs: number } | { ok: false; message: string }
+export async function measureControlLinkRoundTrip(): Promise<
+  { ok: true; roundTripMs: number } | { ok: false; message: string }
 > {
   const start = Date.now();
   try {
     const r = await sshExec("echo reforger-panel-ok");
-    const latencyMs = Date.now() - start;
+    const roundTripMs = Date.now() - start;
     if (r.code !== 0) {
       return { ok: false, message: r.stderr || r.stdout || "SSH echo failed" };
     }
-    return { ok: true, latencyMs };
+    return { ok: true, roundTripMs };
   } catch (e) {
     const raw = e instanceof Error ? e.message : String(e);
     return { ok: false, message: describeSshFailure(raw) };

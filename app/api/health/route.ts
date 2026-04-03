@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { tryGetServerEnv } from "@/lib/env/server";
-import { sshPing } from "@/lib/ssh/client";
+import { measureControlLinkRoundTrip } from "@/lib/ssh/client";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,13 +23,13 @@ export async function GET() {
     );
   }
 
-  const ping = await sshPing();
-  if (!ping.ok) {
+  const control = await measureControlLinkRoundTrip();
+  if (!control.ok) {
     return NextResponse.json({
       status: "degraded",
       sshConfigured: true,
       sshReachable: false,
-      error: ping.message,
+      error: control.message,
     });
   }
 
@@ -37,6 +37,9 @@ export async function GET() {
     status: "ok",
     sshConfigured: true,
     sshReachable: true,
-    latencyMs: ping.latencyMs,
+    /** Panel → instance SSH control round-trip (not player ping). */
+    controlLinkRoundTripMs: control.roundTripMs,
+    /** @deprecated alias for monitors; use controlLinkRoundTripMs */
+    latencyMs: control.roundTripMs,
   });
 }

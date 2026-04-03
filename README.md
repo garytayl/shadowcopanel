@@ -97,10 +97,10 @@ That almost always means **the TCP path to port 22 never completed the SSH hands
 | **Marketplace** | **Official Arma Reforger Workshop** (reforger.armaplatform.com) catalog: search, sort, optional tag filter, import by URL, mod detail with dependencies, **drag-and-drop server stack**, save to remote `config.json` (same `mods` array as **Mods**). Catalog fetch runs **only on the Next.js server** (see `lib/workshop/`). |
 | **Mods**      | Table-first editor: reorder, enable toggle, JSON preview; **export mods JSON**; save to remote config. |
 | **Logs**      | Tail logs, search + filters, health hints; **download current view** as `.txt`. |
-| **Diagnostics** | Dedicated page: SSH ping, full system snapshot, memory/pgrep, socket sample. |
+| **Diagnostics** | Dedicated page: control link round-trip (SSH), full system snapshot, memory/pgrep, socket sample. |
 | **Settings**  | Read-only env-derived settings (Vercel troubleshooting). |
 | **Theme**     | Light/dark toggle (sidebar / mobile header). |
-| **API**       | `GET /api/health` — JSON for uptime monitors (`sshConfigured`, `sshReachable`, `latencyMs`). Workshop helpers: `GET /api/workshop/search`, `GET /api/workshop/mod?id=…`, `POST /api/workshop/import-url`. |
+| **API**       | `GET /api/health` — JSON for uptime monitors (`sshConfigured`, `sshReachable`, `controlLinkRoundTripMs`; `latencyMs` is a deprecated alias). Workshop helpers: `GET /api/workshop/search`, `GET /api/workshop/mod?id=…`, `POST /api/workshop/import-url`. |
 
 ### Marketplace (workshop catalog)
 

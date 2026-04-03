@@ -1,7 +1,7 @@
 import "server-only";
 
 import { requireServerEnv } from "@/lib/env/server";
-import { sshExec, sshPing, sshReadFile, sshWriteFile } from "@/lib/ssh/client";
+import { measureControlLinkRoundTrip, sshExec, sshReadFile, sshWriteFile } from "@/lib/ssh/client";
 import {
   applyFormToConfig,
   configToFormValues,
@@ -14,15 +14,21 @@ import {
 export type ServerRuntimeStatus = {
   sshReachable: boolean;
   sshError?: string;
-  sshLatencyMs?: number;
+  /** Panel → instance control-plane round-trip over SSH (not player ping). */
+  controlLinkRoundTripMs?: number;
   tmuxSessionExists: boolean;
   processRunning: boolean;
   /** Combined heuristic */
   serverLikelyUp: boolean;
 };
 
-export async function getServerRuntimeStatus(): Promise<ServerRuntimeStatus> {
-  const ping = await sshPing();
+type ControlMeasure = Awaited<ReturnType<typeof measureControlLinkRoundTrip>>;
+
+export async function getServerRuntimeStatus(opts?: {
+  /** When provided, skips a second SSH measurement (e.g. joinability run). */
+  control?: ControlMeasure;
+}): Promise<ServerRuntimeStatus> {
+  const ping = opts?.control ?? (await measureControlLinkRoundTrip());
   if (!ping.ok) {
     return {
       sshReachable: false,
@@ -58,7 +64,7 @@ export async function getServerRuntimeStatus(): Promise<ServerRuntimeStatus> {
 
   return {
     sshReachable: true,
-    sshLatencyMs: ping.latencyMs,
+    controlLinkRoundTripMs: ping.roundTripMs,
     tmuxSessionExists,
     processRunning,
     serverLikelyUp,

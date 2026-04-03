@@ -48,26 +48,30 @@ export function DiagnosticsClient() {
         </Button>
       </div>
 
-      {d?.ping ? (
+      {d?.controlLink ? (
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
           <Card className="rounded-2xl border-border/80">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Activity className="size-4" />
-                Connection speed test
+                Control link round-trip
               </CardTitle>
-              <CardDescription>Round-trip time to your server (lower is better)</CardDescription>
+              <CardDescription>
+                Time for this app to run a tiny command over SSH to your instance. This is not in-game player ping.
+              </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap items-center gap-2 text-sm">
-              {d.ping.ok ? (
+              {d.controlLink.ok ? (
                 <>
                   <Badge variant="default">OK</Badge>
-                  <span className="text-muted-foreground">{d.ping.latencyMs} ms</span>
+                  <span className="text-muted-foreground tabular-nums">
+                    {d.controlLink.roundTripMs} ms
+                  </span>
                 </>
               ) : (
                 <>
                   <Badge variant="destructive">Problem</Badge>
-                  <span className="text-destructive">{d.ping.message}</span>
+                  <span className="text-destructive">{d.controlLink.message}</span>
                 </>
               )}
             </CardContent>

@@ -29,11 +29,20 @@ const LABEL: Record<PowerOrbPhase, string> = {
 export function PowerOrb({
   phase,
   className,
+  onClick,
+  disabled = false,
+  title: titleProp,
 }: {
   phase: PowerOrbPhase;
   className?: string;
+  /** Primary power action: start / stop / restart depending on parent logic. */
+  onClick?: () => void;
+  disabled?: boolean;
+  /** Tooltip (e.g. “Stop server”). */
+  title?: string;
 }) {
   const busy = phase === "loading" || phase === "starting" || phase === "stopping" || phase === "restarting";
+  const interactive = Boolean(onClick) && !disabled && !busy;
   const glow =
     phase === "running"
       ? "shadow-[0_0_48px_-8px_color-mix(in_oklch,var(--primary)_55%,transparent),0_0_80px_-20px_color-mix(in_oklch,var(--primary)_35%,transparent)]"
@@ -43,10 +52,18 @@ export function PowerOrb({
 
   return (
     <div className={cn("flex flex-col items-center gap-3", className)}>
-      <motion.div
+      <motion.button
+        type="button"
+        onClick={onClick}
+        disabled={disabled || busy || !onClick}
+        title={titleProp}
+        aria-label={titleProp ?? LABEL[phase]}
         className={cn(
-          "relative flex size-28 items-center justify-center rounded-full border-2 border-border/80 bg-gradient-to-b from-card to-muted/30 md:size-32",
+          "relative flex size-28 items-center justify-center rounded-full border-2 border-border/80 bg-gradient-to-b from-card to-muted/30 outline-none transition-[box-shadow,transform] md:size-32",
           glow,
+          interactive &&
+            "cursor-pointer hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus-visible:ring-2 focus-visible:ring-ring",
+          (disabled || busy || !onClick) && "cursor-default",
         )}
         animate={
           phase === "running"
@@ -55,11 +72,12 @@ export function PowerOrb({
               ? { scale: [1, 1.01, 1] }
               : { scale: 1 }
         }
+        whileTap={interactive ? { scale: 0.97 } : undefined}
         transition={{ duration: 2.4, repeat: phase === "running" || phase === "degraded" ? Infinity : 0, ease: "easeInOut" }}
       >
         <div
           className={cn(
-            "absolute inset-1 rounded-full opacity-90",
+            "pointer-events-none absolute inset-1 rounded-full opacity-90",
             phase === "running" && "bg-gradient-to-br from-emerald-500/25 via-primary/15 to-transparent",
             phase === "degraded" && "bg-gradient-to-br from-amber-500/25 via-amber-500/5 to-transparent",
             (phase === "stopped" || phase === "unknown") && "bg-muted/40",
@@ -82,7 +100,7 @@ export function PowerOrb({
             />
           )}
         </div>
-      </motion.div>
+      </motion.button>
       <div className="text-center">
         <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{LABEL[phase]}</p>
       </div>

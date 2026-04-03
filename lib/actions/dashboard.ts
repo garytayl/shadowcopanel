@@ -2,6 +2,7 @@
 
 import { ensureConfigured } from "@/lib/actions/guard";
 import { getPublicServerSettings } from "@/lib/env/server";
+import { getGamePortChecks } from "@/lib/ssh/port-check";
 import {
   getHealthSnapshot,
   getListeningPorts,
@@ -13,11 +14,14 @@ import {
   stopServer,
 } from "@/lib/ssh/reforger";
 import { err, ok, type ApiResult } from "@/lib/types/api";
+import type { PortCheck } from "@/lib/types/connectivity";
 
 export type DashboardSnapshot = {
   settings: ReturnType<typeof getPublicServerSettings>;
   status: Awaited<ReturnType<typeof getServerRuntimeStatus>>;
   ports: { stdout: string };
+  /** Parsed UDP/TCP socket hints for game ports (not UDP gameplay RTT). */
+  portChecks: PortCheck[];
   health: { free: string; pgrep: string };
   system: Awaited<ReturnType<typeof getSystemSnapshot>>;
 };
@@ -29,14 +33,18 @@ export async function fetchDashboardSnapshot(): Promise<
   if (g !== true) return g;
   try {
     const settings = getPublicServerSettings();
-    const status = await getServerRuntimeStatus();
-    const ports = await getListeningPorts();
-    const health = await getHealthSnapshot();
-    const system = await getSystemSnapshot();
+    const [status, ports, portChecks, health, system] = await Promise.all([
+      getServerRuntimeStatus(),
+      getListeningPorts(),
+      getGamePortChecks(settings.checkPort),
+      getHealthSnapshot(),
+      getSystemSnapshot(),
+    ]);
     return ok({
       settings,
       status,
       ports: { stdout: ports.stdout },
+      portChecks,
       health,
       system,
     });

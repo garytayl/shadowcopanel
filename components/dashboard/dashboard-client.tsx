@@ -10,16 +10,13 @@ import {
   Cpu,
   Download,
   EthernetPort,
-  HardDrive,
   Loader2,
   Megaphone,
-  Network,
   Play,
   Power,
   RefreshCw,
   ScrollText,
   Server,
-  ShieldCheck,
   Timer,
   Users,
 } from "lucide-react";
@@ -35,13 +32,13 @@ import {
   fetchDashboardSnapshot,
   type DashboardSnapshot,
 } from "@/lib/actions/dashboard";
-import { loadModsAction } from "@/lib/actions/mods";
 import {
-  parseDfRootLine,
-  parseFreeMemM,
-  parseLoad1m,
-  portLineMentionsGamePort,
-} from "@/lib/utils/dashboard-metrics";
+  actionRunJoinabilityCheck,
+  actionSyncPublicAddressToPanelHost,
+} from "@/lib/actions/connectivity";
+import { loadModsAction } from "@/lib/actions/mods";
+import { hostsEffectivelyMatch } from "@/lib/connectivity/joinability-model";
+import type { JoinabilityResult } from "@/lib/types/connectivity";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -49,9 +46,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { ConnectivitySection } from "@/components/dashboard/connectivity-section";
 import { Hint } from "@/components/dashboard/hint";
-import { LatencySparkline, readLatencyHistory, recordLatencySample } from "@/components/dashboard/latency-sparkline";
-import { MetricBar } from "@/components/dashboard/metric-bar";
+import {
+  readControlLinkHistory,
+  recordControlLinkSample,
+} from "@/components/dashboard/latency-sparkline";
 import { PowerOrb, type PowerOrbPhase } from "@/components/dashboard/power-orb";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +67,7 @@ function safeDashboardExport(snap: DashboardSnapshot) {
     settings: { ...settingsRest, privateKeyPath: null },
     status: snap.status,
     ports: snap.ports,
+    portChecks: snap.portChecks,
     health: snap.health,
     system: snap.system,
   };
@@ -128,6 +129,9 @@ export function DashboardClient() {
   const [gameName, setGameName] = useState<string | null>(null);
   const [publicAddr, setPublicAddr] = useState<string | null>(null);
   const [latencyHistory, setLatencyHistory] = useState<number[]>([]);
+  const [joinResult, setJoinResult] = useState<JoinabilityResult | null>(null);
+  const [joinLoading, setJoinLoading] = useState(false);
+  const [syncLoading, setSyncLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -138,10 +142,11 @@ export function DashboardClient() {
       return;
     }
     setSnap(r.data);
+    setJoinResult(null);
     setLastRefresh(new Date());
-    if (typeof r.data.status.sshLatencyMs === "number") {
-      recordLatencySample(r.data.status.sshLatencyMs);
-      setLatencyHistory(readLatencyHistory());
+    if (typeof r.data.status.controlLinkRoundTripMs === "number") {
+      recordControlLinkSample(r.data.status.controlLinkRoundTripMs);
+      setLatencyHistory(readControlLinkHistory());
     }
     if (modsR.ok) {
       setModCount(modsR.data.mods.length);
@@ -172,7 +177,7 @@ export function DashboardClient() {
     } catch {
       /* ignore */
     }
-    setLatencyHistory(readLatencyHistory());
+    setLatencyHistory(readControlLinkHistory());
   }, []);
 
   useEffect(() => {
@@ -227,19 +232,8 @@ export function DashboardClient() {
     return "Server";
   }, [s]);
 
-  const mem = snap?.health?.free ? parseFreeMemM(snap.health.free) : null;
-  const disk = snap?.system?.diskRoot ? parseDfRootLine(snap.system.diskRoot) : null;
-  const load = snap?.system?.loadavg ? parseLoad1m(snap.system.loadavg) : null;
-
-  const joinable =
-    st?.serverLikelyUp &&
-    s?.configured &&
-    portLineMentionsGamePort(snap?.ports.stdout ?? "", s.checkPort);
-
   const publicMatch =
-    publicAddr && s?.host
-      ? publicAddr === s.host || publicAddr.includes(s.host) || s.host.includes(publicAddr)
-      : null;
+    publicAddr && s?.host ? hostsEffectivelyMatch(publicAddr, s.host) : null;
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -259,7 +253,7 @@ export function DashboardClient() {
               <h2 className="truncate text-xl font-semibold tracking-tight md:text-2xl">{serverTitle}</h2>
               {st?.sshReachable ? (
                 <Badge variant="default" className="font-normal">
-                  SSH
+                  Control link
                 </Badge>
               ) : (
                 <Badge variant="secondary">Offline</Badge>
@@ -328,7 +322,7 @@ export function DashboardClient() {
       </section>
 
       {/* Primary metrics */}
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           icon={Activity}
           label="Power"
@@ -342,22 +336,7 @@ export function DashboardClient() {
             <span className="text-muted-foreground">Down</span>
           )}
         </StatCard>
-        <StatCard icon={Network} label="Joinable" hint="Process up + game port in use">
-          {loading && !snap ? "…" : joinable ? <span className="text-emerald-500">Likely</span> : "No"}
-        </StatCard>
-        <StatCard icon={ShieldCheck} label="SSH" hint="Round-trip to host">
-          {loading && !snap ? (
-            "…"
-          ) : st?.sshReachable ? (
-            <span className="tabular-nums">{st.sshLatencyMs != null ? `${st.sshLatencyMs} ms` : "OK"}</span>
-          ) : (
-            <span className="text-destructive">Fail</span>
-          )}
-        </StatCard>
-        <StatCard icon={Timer} label="Latency" hint="SSH handshake">
-          {loading && !snap ? "…" : st?.sshLatencyMs != null ? `${st.sshLatencyMs} ms` : "—"}
-        </StatCard>
-        <StatCard icon={Users} label="Players" hint="Placeholder until server API">
+        <StatCard icon={Users} label="Players" hint="Not measured from the panel; game API TBD">
           —
         </StatCard>
         <StatCard icon={Server} label="Mods" hint="mods in config.json">
@@ -374,6 +353,45 @@ export function DashboardClient() {
           </span>
         </StatCard>
       </section>
+
+      <ConnectivitySection
+        snap={snap}
+        loading={loading}
+        history={latencyHistory}
+        publicAddr={publicAddr}
+        joinResult={joinResult}
+        joinLoading={joinLoading}
+        syncLoading={syncLoading}
+        onRunJoinCheck={async () => {
+          setJoinLoading(true);
+          try {
+            const r = await actionRunJoinabilityCheck();
+            if (!r.ok) {
+              toast.error(r.error);
+              return;
+            }
+            setJoinResult(r.data);
+            toast.success("Joinability check complete");
+          } finally {
+            setJoinLoading(false);
+          }
+        }}
+        onSyncPublicIp={async () => {
+          setSyncLoading(true);
+          try {
+            const r = await actionSyncPublicAddressToPanelHost();
+            if (!r.ok) {
+              toast.error(r.error);
+              return;
+            }
+            toast.success(`Saved config (${r.data.bytes} bytes)`);
+            setJoinResult(null);
+            await refresh();
+          } finally {
+            setSyncLoading(false);
+          }
+        }}
+      />
 
       {/* Quick actions */}
       <section className="flex flex-wrap gap-2">
@@ -441,56 +459,6 @@ export function DashboardClient() {
           <ArrowUpRight className="size-3.5 opacity-70" aria-hidden />
         </Link>
       </section>
-
-      {/* Resource health */}
-      {snap?.health ? (
-        <section className="rounded-2xl border border-border/70 bg-card/30 p-4 md:p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <HardDrive className="size-4 text-primary" aria-hidden />
-            <h3 className="text-sm font-semibold">Resources</h3>
-            <Hint label="Snapshot from last refresh; not a live monitor" />
-          </div>
-          <div className="grid gap-6 md:grid-cols-3">
-            <div>
-              <div className="mb-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>Memory</span>
-                {mem ? <span>{mem.usedPct}%</span> : null}
-              </div>
-              <MetricBar
-                value={mem?.usedPct ?? 0}
-                label={mem?.line}
-                tone={mem && mem.usedPct > 90 ? "danger" : mem && mem.usedPct > 75 ? "warn" : "default"}
-              />
-            </div>
-            <div>
-              <div className="mb-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>Disk /</span>
-                {disk ? <span>{disk.usedPct}%</span> : null}
-              </div>
-              <MetricBar
-                value={disk?.usedPct ?? 0}
-                label={disk?.line}
-                tone={disk && disk.usedPct > 90 ? "danger" : disk && disk.usedPct > 80 ? "warn" : "default"}
-              />
-            </div>
-            <div>
-              <div className="mb-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>Load</span>
-                {load ? <span>{load.label}</span> : null}
-              </div>
-              <MetricBar
-                value={load?.pct ?? 0}
-                label={snap.system.loadavg}
-                tone={load && load.pct > 85 ? "warn" : "default"}
-              />
-            </div>
-          </div>
-          <div className="mt-6 flex flex-col gap-2 border-t border-border/50 pt-4 md:flex-row md:items-center md:justify-between">
-            <span className="text-[11px] text-muted-foreground">SSH latency trend</span>
-            <LatencySparkline values={latencyHistory} />
-          </div>
-        </section>
-      ) : null}
 
       {/* Diagnostics strip */}
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
