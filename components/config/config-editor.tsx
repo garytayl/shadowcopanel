@@ -2,20 +2,24 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { FileDown, Images, Loader2, Save, Download } from "lucide-react";
+import { FileDown, Images, Loader2, Save, Download, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   exportRemoteConfigAction,
   loadRemoteConfigAction,
+  repairRemoteConfigAction,
   saveRawConfigAction,
   saveRemoteConfigAction,
 } from "@/lib/actions/config";
+import { ConfigAnomalyBanner } from "@/components/panel/config-anomaly-banner";
 import { downloadTextFile } from "@/lib/utils/download";
+import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
+import type { ConfigNormalizationIssue } from "@/lib/reforger/types";
 import {
   configToFormValues,
   defaultFormValues,
-  type ReforgerConfig,
+  parseConfigJson,
   type ReforgerFormValues,
 } from "@/lib/types/reforger-config";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -59,9 +63,9 @@ function NumberInput({
 }
 
 export function ConfigEditor() {
-  const [base, setBase] = useState<ReforgerConfig | null>(null);
   const [form, setForm] = useState<ReforgerFormValues>(() => defaultFormValues());
   const [raw, setRaw] = useState("");
+  const [anomalies, setAnomalies] = useState<ConfigNormalizationIssue[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -73,9 +77,9 @@ export function ConfigEditor() {
       toast.error(r.error);
       return;
     }
-    setBase(r.data.parsed);
     setForm(r.data.form);
     setRaw(r.data.raw);
+    setAnomalies(r.data.anomalies);
     if (!opts?.silent) {
       toast.success("Loaded remote config");
     }
@@ -89,18 +93,31 @@ export function ConfigEditor() {
   }, [load]);
 
   const saveForm = async () => {
-    if (!base) {
-      toast.error("Load config first");
-      return;
-    }
     setSaving(true);
-    const r = await saveRemoteConfigAction(JSON.stringify(base), form);
+    const r = await saveRemoteConfigAction(form);
     setSaving(false);
     if (!r.ok) {
       toast.error(r.error);
       return;
     }
-    toast.success(`Saved (${r.data.bytes} bytes)`);
+    const b = r.data.backupPath;
+    toast.success(
+      `Saved (${r.data.bytes} bytes)${b ? ` · backup: ${b}` : r.data.backupNote ? ` · ${r.data.backupNote}` : ""}`,
+    );
+    await load();
+  };
+
+  const repairConfig = async () => {
+    setSaving(true);
+    const r = await repairRemoteConfigAction();
+    setSaving(false);
+    if (!r.ok) {
+      toast.error(r.error);
+      return;
+    }
+    toast.success(
+      `Config normalized on server (${r.data.bytes} bytes)${r.data.backupPath ? ` · backup ${r.data.backupPath}` : ""}`,
+    );
     await load();
   };
 
@@ -112,7 +129,10 @@ export function ConfigEditor() {
       toast.error(r.error);
       return;
     }
-    toast.success(`Saved raw JSON (${r.data.bytes} bytes)`);
+    const b = r.data.backupPath;
+    toast.success(
+      `Saved raw JSON (${r.data.bytes} bytes)${b ? ` · backup: ${b}` : r.data.backupNote ? ` · ${r.data.backupNote}` : ""}`,
+    );
     await load();
   };
 
@@ -129,22 +149,29 @@ export function ConfigEditor() {
   };
 
   const applyRawToForm = () => {
-    try {
-      const p = JSON.parse(raw) as ReforgerConfig;
-      if (p === null || typeof p !== "object" || Array.isArray(p)) {
-        toast.error("Root must be an object");
-        return;
-      }
-      setBase(p);
-      setForm(configToFormValues(p));
+    const p = parseConfigJson(raw);
+    if (!p.ok) {
+      toast.error(p.error);
+      return;
+    }
+    const norm = normalizeReforgerConfig(p.value);
+    setForm(configToFormValues(norm.config));
+    setAnomalies(norm.issues);
+    if (norm.issues.length) {
+      toast.message("Normalized JSON into form", {
+        description: norm.issues
+          .slice(0, 4)
+          .map((i) => i.message)
+          .join(" · "),
+      });
+    } else {
       toast.success("Parsed JSON into form");
-    } catch {
-      toast.error("Invalid JSON");
     }
   };
 
   return (
     <div className="space-y-6">
+      <ConfigAnomalyBanner issues={anomalies} />
       <Alert className="rounded-2xl border-amber-500/40 bg-amber-500/5">
         <AlertTitle>Passwords &amp; privacy</AlertTitle>
         <AlertDescription>
@@ -157,6 +184,15 @@ export function ConfigEditor() {
         <Button onClick={() => void load()} disabled={loading || saving}>
           {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Download className="mr-2 size-4" />}
           Load current file from server
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => void repairConfig()}
+          disabled={saving || loading}
+        >
+          {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Wrench className="mr-2 size-4" />}
+          Repair / normalize config
         </Button>
         <Button type="button" variant="outline" onClick={() => void downloadExport()} disabled={saving}>
           {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <FileDown className="mr-2 size-4" />}
@@ -406,7 +442,7 @@ export function ConfigEditor() {
             </Card>
           </motion.div>
           <div className="mt-4 flex justify-end">
-            <Button onClick={() => void saveForm()} disabled={saving || !base}>
+            <Button onClick={() => void saveForm()} disabled={saving}>
               {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
               Save form to server
             </Button>

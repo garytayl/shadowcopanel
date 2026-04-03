@@ -3,7 +3,8 @@
 import { ensureConfigured } from "@/lib/actions/guard";
 import { requireServerEnv } from "@/lib/env/server";
 import { runJoinabilityDiagnostics } from "@/lib/ssh/joinability";
-import { getRemoteConfigText, saveRemoteConfig } from "@/lib/ssh/reforger";
+import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
+import { getRemoteConfigText, saveRemoteConfig, type RemoteConfigSaveResult } from "@/lib/ssh/reforger";
 import { parseConfigJson, type ReforgerConfig } from "@/lib/types/reforger-config";
 import { err, ok, type ApiResult } from "@/lib/types/api";
 import type { JoinabilityResult } from "@/lib/types/connectivity";
@@ -25,7 +26,7 @@ export async function actionRunJoinabilityCheck(): Promise<
  * Set `publicAddress` in remote config.json to the panel’s configured SSH host (EC2 public IP/DNS).
  */
 export async function actionSyncPublicAddressToPanelHost(): Promise<
-  ApiResult<{ bytes: number }>
+  ApiResult<RemoteConfigSaveResult>
 > {
   const g = ensureConfigured();
   if (g !== true) return g;
@@ -37,11 +38,8 @@ export async function actionSyncPublicAddressToPanelHost(): Promise<
     const raw = await getRemoteConfigText();
     const p = parseConfigJson(raw);
     if (!p.ok) return err(p.error);
-    const base = p.value as ReforgerConfig;
-    const next: ReforgerConfig = {
-      ...base,
-      publicAddress: host,
-    };
+    const base = normalizeReforgerConfig(p.value as ReforgerConfig).config;
+    const next: ReforgerConfig = { ...base, publicAddress: host };
     return ok(await saveRemoteConfig(next));
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));

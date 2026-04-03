@@ -7,7 +7,10 @@ export type ReforgerMod = {
   modId: string;
   name?: string;
   version?: string;
-  /** Panel-specific; Reforger may ignore this field */
+  /**
+   * UI-only when present in imported JSON — never written by this panel to the server
+   * (use row presence + load order instead).
+   */
   enabled?: boolean;
 };
 
@@ -37,6 +40,8 @@ export type ReforgerGame = {
   visible?: boolean;
   crossPlatform?: boolean;
   scenarioId?: string;
+  /** Canonical workshop mod list — do not use a top-level `mods` key on the root config. */
+  mods?: ReforgerMod[];
   gameProperties?: {
     serverMaxViewDistance?: number;
     networkViewDistance?: number;
@@ -50,7 +55,10 @@ export type ReforgerA2S = {
   port?: number;
 };
 
-/** Shape we read/write; extra keys allowed at runtime */
+/**
+ * Shape we read/write; extra keys allowed at runtime.
+ * Workshop mods belong under `game.mods` only — a top-level `mods` key is invalid and removed on save.
+ */
 export type ReforgerConfig = {
   /** Backend / server identity (optional) */
   dedicatedServerId?: string;
@@ -61,7 +69,6 @@ export type ReforgerConfig = {
   publicPort?: number;
   a2s?: ReforgerA2S;
   game?: ReforgerGame;
-  mods?: ReforgerMod[];
   [key: string]: unknown;
 };
 
@@ -236,6 +243,9 @@ export function applyFormToConfig(
   } else {
     delete root.region;
   }
+
+  // Never persist legacy top-level `mods` — canonical list is `game.mods` (see lib/reforger/).
+  delete root.mods;
 
   return next;
 }

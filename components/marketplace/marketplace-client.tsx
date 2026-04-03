@@ -24,7 +24,9 @@ import {
   saveModsAction,
   type ModRowPayload,
 } from "@/lib/actions/mods";
+import { ConfigAnomalyBanner } from "@/components/panel/config-anomaly-banner";
 import { downloadTextFile } from "@/lib/utils/download";
+import type { ConfigNormalizationIssue } from "@/lib/reforger/types";
 import type { WorkshopCatalogMod, WorkshopSearchResult, WorkshopSort } from "@/lib/workshop/types";
 import { formatSubscriberCount, formatWorkshopRating } from "@/lib/utils/format";
 import {
@@ -127,6 +129,7 @@ export function MarketplaceClient() {
   const [stack, setStack] = useState<(ModRowPayload & { key: string })[]>([]);
   const [remoteSig, setRemoteSig] = useState<string>("");
   const [stackLoading, setStackLoading] = useState(true);
+  const [stackAnomalies, setStackAnomalies] = useState<ConfigNormalizationIssue[]>([]);
   const [saving, setSaving] = useState(false);
 
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -162,6 +165,7 @@ export function MarketplaceClient() {
     const rows = r.data.mods.map((m) => ({ ...m, key: uid() }));
     setStack(rows);
     setRemoteSig(signature(r.data.mods));
+    setStackAnomalies(r.data.anomalies);
   }, []);
 
   useEffect(() => {
@@ -283,7 +287,14 @@ export function MarketplaceClient() {
       toast.error(r.error);
       return;
     }
-    toast.success(`Saved (${r.data.bytes} bytes written to config.json)`);
+    const b = r.data.backupPath;
+    const warn = r.data.normalizationIssues?.filter((i) => i.severity === "warn") ?? [];
+    toast.success(
+      `Saved (${r.data.bytes} bytes → game.mods)${b ? ` · backup ${b}` : r.data.backupNote ? ` · ${r.data.backupNote}` : ""}`,
+    );
+    if (warn.length) {
+      toast.message("Normalization", { description: warn.slice(0, 3).map((i) => i.message).join(" · ") });
+    }
     await loadStack();
   }
 
@@ -365,11 +376,15 @@ export function MarketplaceClient() {
   const starredEntries = readStarred();
 
   const jsonExport = useMemo(() => {
-    return JSON.stringify({ mods: rowsToPayload(stack) }, null, 2);
+    const mods = rowsToPayload(stack)
+      .filter((m) => m.enabled !== false)
+      .map(({ modId, name, version }) => ({ modId, name, version }));
+    return JSON.stringify({ game: { mods } }, null, 2);
   }, [stack]);
 
   return (
     <div className="space-y-6" data-library-rev={libraryTick}>
+      <ConfigAnomalyBanner issues={stackAnomalies} />
       {dirty ? (
         <div className="flex flex-col gap-3 rounded-2xl border border-amber-500/35 bg-amber-500/[0.07] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-2.5">
@@ -377,7 +392,7 @@ export function MarketplaceClient() {
             <div>
               <p className="text-sm font-medium text-foreground">Unsaved stack</p>
               <p className="text-xs text-muted-foreground">
-                Save writes <code className="text-[10px]">mods</code> to remote{" "}
+                Save writes <code className="text-[10px]">game.mods</code> in remote{" "}
                 <code className="text-[10px]">config.json</code>, or restore below.
               </p>
             </div>

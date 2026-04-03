@@ -2,6 +2,10 @@ import "server-only";
 
 import { requireServerEnv } from "@/lib/env/server";
 import { measureControlLinkRoundTrip, sshExec, sshReadFile, sshWriteFile } from "@/lib/ssh/client";
+import { backupRemoteConfigBeforeWrite } from "@/lib/reforger/config-backup";
+import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
+import { validateReforgerConfigForWrite } from "@/lib/reforger/config-validate";
+import type { ConfigNormalizationIssue } from "@/lib/reforger/types";
 import {
   applyFormToConfig,
   configToFormValues,
@@ -158,21 +162,51 @@ export async function getRemoteConfigParsed(): Promise<ReforgerConfig> {
   const raw = await getRemoteConfigText();
   const p = parseConfigJson(raw);
   if (!p.ok) throw new Error(p.error);
-  return p.value;
+  return normalizeReforgerConfig(p.value).config;
 }
 
-export async function saveRemoteConfig(config: ReforgerConfig): Promise<{ bytes: number }> {
+export type RemoteConfigSaveResult = {
+  bytes: number;
+  /** Remote path of the timestamped backup, or null if first write / no prior file. */
+  backupPath: string | null;
+  backupNote?: string;
+  normalizationIssues: ConfigNormalizationIssue[];
+};
+
+/**
+ * Writes `config.json` after normalization + validation, with a remote backup when a prior file exists.
+ */
+export async function saveRemoteConfig(config: ReforgerConfig): Promise<RemoteConfigSaveResult> {
+  const norm = normalizeReforgerConfig(config);
+  const v = validateReforgerConfigForWrite(norm.config);
+  if (!v.ok) {
+    throw new Error(v.issues.map((i) => `${i.path}: ${i.message}`).join("; "));
+  }
+
+  const backup = await backupRemoteConfigBeforeWrite();
+  if (!backup.ok) {
+    throw new Error(
+      `Config backup failed (${backup.message}). Save aborted so your previous file is not lost without a snapshot.`,
+    );
+  }
+
   const env = requireServerEnv();
   const path = env.REFORGER_CONFIG_PATH;
-  const body = stringifyConfig(config);
+  const body = stringifyConfig(norm.config);
   await sshWriteFile(path, body);
-  return { bytes: Buffer.byteLength(body, "utf8") };
+
+  return {
+    bytes: Buffer.byteLength(body, "utf8"),
+    backupPath: backup.skipped ? null : backup.remotePath,
+    backupNote: backup.skipped ? backup.reason : undefined,
+    normalizationIssues: norm.issues,
+  };
 }
 
 export async function saveRemoteConfigFromForm(
   base: ReforgerConfig,
   form: ReforgerFormValues,
-): Promise<{ bytes: number }> {
+): Promise<RemoteConfigSaveResult> {
   const merged = applyFormToConfig(base, form);
   return saveRemoteConfig(merged);
 }

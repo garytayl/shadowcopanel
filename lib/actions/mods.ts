@@ -1,12 +1,16 @@
 "use server";
 
 import { ensureConfigured } from "@/lib/actions/guard";
+import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
+import { applyModsMutation } from "@/lib/reforger/mods";
+import type { ConfigNormalizationIssue } from "@/lib/reforger/types";
 import {
   parseConfigJson,
   type ReforgerConfig,
   type ReforgerMod,
 } from "@/lib/types/reforger-config";
 import { getRemoteConfigText, saveRemoteConfig } from "@/lib/ssh/reforger";
+import type { RemoteConfigSaveResult } from "@/lib/ssh/reforger";
 import { err, ok, type ApiResult } from "@/lib/types/api";
 
 export type ModRowPayload = {
@@ -23,6 +27,7 @@ export async function loadModsAction(): Promise<
     scenarioId: string | null;
     gameName: string | null;
     publicAddress: string | null;
+    anomalies: ConfigNormalizationIssue[];
   }>
 > {
   const g = ensureConfigured();
@@ -31,13 +36,14 @@ export async function loadModsAction(): Promise<
     const rawConfig = await getRemoteConfigText();
     const p = parseConfigJson(rawConfig);
     if (!p.ok) return err(p.error);
-    const cfg = p.value as ReforgerConfig;
-    const mods = (cfg.mods ?? []) as ReforgerMod[];
-    const rows: ModRowPayload[] = mods.map((m) => ({
+    const norm = normalizeReforgerConfig(p.value as ReforgerConfig);
+    const cfg = norm.config;
+    const gameMods = (cfg.game?.mods ?? []) as ReforgerMod[];
+    const rows: ModRowPayload[] = gameMods.map((m) => ({
       modId: String(m.modId ?? ""),
       name: String(m.name ?? ""),
       version: String(m.version ?? ""),
-      enabled: m.enabled !== false,
+      enabled: true,
     }));
     const sid = cfg.game?.scenarioId;
     const gname = cfg.game?.name;
@@ -48,6 +54,7 @@ export async function loadModsAction(): Promise<
       scenarioId: sid != null && sid !== "" ? String(sid) : null,
       gameName: gname != null && gname !== "" ? String(gname) : null,
       publicAddress: pub != null && pub !== "" ? String(pub) : null,
+      anomalies: norm.issues,
     });
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));
@@ -56,27 +63,20 @@ export async function loadModsAction(): Promise<
 
 export async function saveModsAction(
   mods: ModRowPayload[],
-): Promise<ApiResult<{ bytes: number }>> {
+): Promise<ApiResult<RemoteConfigSaveResult>> {
   const g = ensureConfigured();
   if (g !== true) return g;
   try {
     const raw = await getRemoteConfigText();
     const p = parseConfigJson(raw);
     if (!p.ok) return err(p.error);
-    const base = p.value as ReforgerConfig;
-    const nextMods: ReforgerMod[] = mods
-      .filter((m) => m.modId.trim())
-      .map((m) => ({
-        modId: m.modId.trim(),
-        name: m.name.trim() || undefined,
-        version: m.version.trim() || undefined,
-        enabled: m.enabled,
-      }));
-    const next: ReforgerConfig = {
-      ...base,
-      mods: nextMods,
-    };
-    return ok(await saveRemoteConfig(next));
+    const { config, issues } = applyModsMutation(p.value as ReforgerConfig, mods);
+    const blocking = issues.filter((i) => i.severity === "error");
+    if (blocking.length > 0) {
+      return err(blocking.map((i) => i.message).join(" "));
+    }
+    const r = await saveRemoteConfig(config);
+    return ok(r);
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));
   }

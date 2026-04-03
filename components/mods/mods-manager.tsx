@@ -18,7 +18,9 @@ import {
   saveModsAction,
   type ModRowPayload,
 } from "@/lib/actions/mods";
+import { ConfigAnomalyBanner } from "@/components/panel/config-anomaly-banner";
 import { downloadTextFile } from "@/lib/utils/download";
+import type { ConfigNormalizationIssue } from "@/lib/reforger/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,6 +47,7 @@ function uid() {
 
 export function ModsManager() {
   const [rows, setRows] = useState<(ModRowPayload & { key: string })[]>([]);
+  const [anomalies, setAnomalies] = useState<ConfigNormalizationIssue[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -62,6 +65,7 @@ export function ModsManager() {
         key: uid(),
       })),
     );
+    setAnomalies(r.data.anomalies);
   }, []);
 
   useEffect(() => {
@@ -73,14 +77,13 @@ export function ModsManager() {
 
   const jsonPreview = useMemo(() => {
     const mods = rows
-      .filter((r) => r.modId.trim())
-      .map(({ modId, name, version, enabled }) => ({
+      .filter((r) => r.modId.trim() && r.enabled !== false)
+      .map(({ modId, name, version }) => ({
         modId: modId.trim(),
-        name: name.trim() || undefined,
-        version: version.trim() || undefined,
-        enabled,
+        name: name.trim(),
+        version: version.trim(),
       }));
-    return JSON.stringify({ mods }, null, 2);
+    return JSON.stringify({ game: { mods } }, null, 2);
   }, [rows]);
 
   const move = (index: number, dir: -1 | 1) => {
@@ -110,12 +113,20 @@ export function ModsManager() {
       toast.error(r.error);
       return;
     }
-    toast.success(`Saved mods (${r.data.bytes} bytes)`);
+    const b = r.data.backupPath;
+    const warn = r.data.normalizationIssues?.filter((i) => i.severity === "warn") ?? [];
+    toast.success(
+      `Saved mods (${r.data.bytes} bytes → game.mods)${b ? ` · backup ${b}` : r.data.backupNote ? ` · ${r.data.backupNote}` : ""}`,
+    );
+    if (warn.length) {
+      toast.message("Normalization", { description: warn.slice(0, 3).map((i) => i.message).join(" · ") });
+    }
     await load();
   };
 
   return (
     <div className="space-y-6">
+      <ConfigAnomalyBanner issues={anomalies} />
       <Alert className="rounded-2xl border-amber-500/40 bg-amber-500/5">
         <AlertTitle>Go easy when adding mods</AlertTitle>
         <AlertDescription>
@@ -164,8 +175,8 @@ export function ModsManager() {
         <CardHeader>
           <CardTitle className="text-base">Mods</CardTitle>
           <CardDescription>
-            “Enabled” is saved in your config so you can turn mods off without deleting the row. Some setups
-            ignore unknown fields—if the game complains, ask in your community.
+            “Enabled” is UI-only: disabled rows are not written to the server. The panel saves workshop mods only
+            under <code className="text-xs">game.mods</code> (canonical Reforger shape).
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto">
@@ -285,7 +296,9 @@ export function ModsManager() {
         <Card className="rounded-2xl border-border/80">
           <CardHeader>
             <CardTitle className="text-base">JSON preview (mods block)</CardTitle>
-            <CardDescription>Approximation of the object written under <code className="text-xs">mods</code></CardDescription>
+            <CardDescription>
+              Approximation of <code className="text-xs">game.mods</code> (enabled rows only)
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <pre className="max-h-64 overflow-auto rounded-xl bg-muted/50 p-4 font-mono text-[11px] leading-relaxed">

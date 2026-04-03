@@ -16,6 +16,15 @@ The UI is written for operators first; technical names still appear in **Setting
 - shadcn/ui, lucide-react, Framer Motion
 - `ssh2` for server-side SSH/SFTP
 
+## Reforger config pipeline (mods)
+
+Workshop mods belong **only** under **`game.mods`** in `config.json`. A **top-level `mods` key is invalid** and is merged into `game.mods` then removed on load/save.
+
+- **Code:** `lib/reforger/` — `normalizeReforgerConfig`, `validateReforgerConfigForWrite`, `applyModsMutation`, shared types. UI-only fields (`enabled`, `source`, etc.) are **not** written to the server.
+- **Writes:** `saveRemoteConfig` in `lib/ssh/reforger.ts` normalizes, validates, then writes; a **remote backup** `config.json.bak.<timestamp>` is created when a prior file exists.
+- **Actions:** `saveRemoteConfigAction` / `saveModsAction` / `saveRawConfigAction` always **re-read** the remote file before applying changes (no stale client merges). **Repair / normalize config** on the Config page rewrites a canonical file.
+- **Tests:** `npm test` (Vitest) covers normalization, validation, and dedupe.
+
 ## Security warnings
 
 - **Do not expose this app to the public internet** without authentication, TLS, and network restrictions. Anyone who can use the UI can start/stop the game server and overwrite `config.json`.
@@ -50,13 +59,19 @@ The UI is written for operators first; technical names still appear in **Setting
    chmod 600 /path/to/your.pem
    ```
 
-6. Run the dev server:
+6. Unit tests (optional):
+
+   ```bash
+   npm test
+   ```
+
+7. Run the dev server:
 
    ```bash
    npm run dev
    ```
 
-7. Open [http://localhost:3000](http://localhost:3000) — you should land on **Dashboard**.
+8. Open [http://localhost:3000](http://localhost:3000) — you should land on **Dashboard**.
 
 ## Production build
 
@@ -93,9 +108,9 @@ That almost always means **the TCP path to port 22 never completed the SSH hands
 | Area        | Behavior |
 |------------|----------|
 | **Dashboard** | SSH reachability, tmux/process heuristics, EC2 target (copy **user@host**), **remote system** snapshot (kernel, uptime, disk, load, tmux), ports (`ss`), memory/process, **auto-refresh every 30s**, quick actions (start/stop/restart, health, ports, logs). |
-| **Config**    | Load/save `config.json` over SFTP; form + raw JSON; **mission header** text + **icon / loading / preview** resource paths; optional **dedicatedServerId** / **region**; **download JSON backup**. |
-| **Marketplace** | **Official Arma Reforger Workshop** (reforger.armaplatform.com) catalog: search, sort, optional tag filter, import by URL, mod detail with dependencies, **drag-and-drop server stack**, save to remote `config.json` (same `mods` array as **Mods**). Catalog fetch runs **only on the Next.js server** (see `lib/workshop/`). |
-| **Mods**      | Table-first editor: reorder, enable toggle, JSON preview; **export mods JSON**; save to remote config. |
+| **Config**    | Load/save `config.json` over SFTP; form + raw JSON; **mission header** text + **icon / loading / preview** resource paths; optional **dedicatedServerId** / **region**; **download JSON backup**; **Repair / normalize** for legacy/corrupt shapes. |
+| **Marketplace** | **Official Arma Reforger Workshop** (reforger.armaplatform.com) catalog: search, sort, optional tag filter, import by URL, mod detail with dependencies, **drag-and-drop server stack**, save to remote `config.json` under **`game.mods`** (same stack as **Mods**). Catalog fetch runs **only on the Next.js server** (see `lib/workshop/`). |
+| **Mods**      | Table-first editor: reorder, enable toggle, JSON preview under **`game.mods`**; **export**; save to remote config with anomaly banner when the file had legacy shape. |
 | **Logs**      | Tail logs, search + filters, health hints; **download current view** as `.txt`. |
 | **Diagnostics** | Dedicated page: control link round-trip (SSH), full system snapshot, memory/pgrep, socket sample. |
 | **Settings**  | Read-only env-derived settings (Vercel troubleshooting). |
@@ -104,7 +119,7 @@ That almost always means **the TCP path to port 22 never completed the SSH hands
 
 ### Marketplace (workshop catalog)
 
-- **What it does:** Lets you discover mods on the **Reforger Workshop** website (not Steam Workshop), preview metadata, and **compose the ordered `mods` list** that gets written to your server’s `config.json`.
+- **What it does:** Lets you discover mods on the **Reforger Workshop** website (not Steam Workshop), preview metadata, and **compose the ordered `game.mods` list** that gets written to your server’s `config.json`.
 - **How it works:** The Next.js server requests the public workshop HTML and reads the embedded Next.js `__NEXT_DATA__` JSON (same payload the official site uses). That is normalized into typed models in `lib/workshop/reforger-workshop.ts`. The browser only calls **your** app’s `/api/workshop/*` routes, never the workshop origin directly.
 - **Caveats:** If Bohemia changes the workshop HTML layout or removes `__NEXT_DATA__`, search/detail may break until the parser is updated. The provider interface (`lib/workshop/provider.ts`) is the place to plug in a **future official HTTP API** without rewriting the UI.
 - **Dependencies:** “Add with dependencies” uses dependency metadata from the workshop when present. Some mods may still list requirements only in prose—always verify before going live.
