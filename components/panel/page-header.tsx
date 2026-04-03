@@ -9,7 +9,7 @@ export function PageHeader({
   children,
 }: {
   title: string;
-  description?: string;
+  description?: ReactNode;
   /** Extra help (e.g. InPlainEnglish) — renders below the subtitle */
   children?: ReactNode;
 }) {
@@ -42,15 +42,15 @@ export function PageHeader({
           ))}
         </span>
       </h1>
-      {description ? (
-        <motion.p
+      {description != null && description !== "" ? (
+        <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: reduce ? 0 : 0.12, duration: 0.35 }}
           className="mt-2 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-sm"
         >
           {description}
-        </motion.p>
+        </motion.div>
       ) : null}
       {children ? (
         <motion.div

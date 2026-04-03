@@ -17,7 +17,13 @@ export type ModRowPayload = {
 };
 
 export async function loadModsAction(): Promise<
-  ApiResult<{ mods: ModRowPayload[]; rawConfig: string }>
+  ApiResult<{
+    mods: ModRowPayload[];
+    rawConfig: string;
+    scenarioId: string | null;
+    gameName: string | null;
+    publicAddress: string | null;
+  }>
 > {
   const g = ensureConfigured();
   if (g !== true) return g;
@@ -25,14 +31,24 @@ export async function loadModsAction(): Promise<
     const rawConfig = await getRemoteConfigText();
     const p = parseConfigJson(rawConfig);
     if (!p.ok) return err(p.error);
-    const mods = (p.value.mods ?? []) as ReforgerMod[];
+    const cfg = p.value as ReforgerConfig;
+    const mods = (cfg.mods ?? []) as ReforgerMod[];
     const rows: ModRowPayload[] = mods.map((m) => ({
       modId: String(m.modId ?? ""),
       name: String(m.name ?? ""),
       version: String(m.version ?? ""),
       enabled: m.enabled !== false,
     }));
-    return ok({ mods: rows, rawConfig });
+    const sid = cfg.game?.scenarioId;
+    const gname = cfg.game?.name;
+    const pub = cfg.publicAddress;
+    return ok({
+      mods: rows,
+      rawConfig,
+      scenarioId: sid != null && sid !== "" ? String(sid) : null,
+      gameName: gname != null && gname !== "" ? String(gname) : null,
+      publicAddress: pub != null && pub !== "" ? String(pub) : null,
+    });
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));
   }

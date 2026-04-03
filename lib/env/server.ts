@@ -96,6 +96,8 @@ export type PublicServerSettings = {
   logGlob: string | null;
   /** Optional banner text for all users (set in hosting env) */
   announcement: string | null;
+  /** Game / query port highlighted on Home (from REFORGER_CHECK_PORT) */
+  checkPort: number;
 };
 
 export function getPublicServerSettings(): PublicServerSettings {
@@ -116,6 +118,7 @@ export function getPublicServerSettings(): PublicServerSettings {
       instanceNotes: "",
       logGlob: null,
       announcement,
+      checkPort: num(env("REFORGER_CHECK_PORT"), 2001),
     };
   }
   return {
@@ -134,5 +137,6 @@ export function getPublicServerSettings(): PublicServerSettings {
     instanceNotes: e.REFORGER_INSTANCE_NOTES,
     logGlob: e.REFORGER_LOG_GLOB ?? null,
     announcement,
+    checkPort: num(env("REFORGER_CHECK_PORT"), 2001),
   };
 }
