@@ -6,6 +6,7 @@ import { Activity, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Hint } from "@/components/dashboard/hint";
+import { LogAnalysisCard } from "@/components/panel/log-analysis-card";
 import { fetchDiagnosticsAction } from "@/lib/actions/diagnostics";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,14 @@ export function DiagnosticsClient() {
         </Button>
         <Hint label="Connects again and grabs fresh info: OS, RAM, running programs, and ports." />
       </div>
+
+      {d?.logAnalysis ? (
+        <LogAnalysisCard
+          analysis={d.logAnalysis}
+          title="Log analysis"
+          description="Structured patterns from a recent server log tail (same discovery as the Logs page)."
+        />
+      ) : null}
 
       {d?.controlLink ? (
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>

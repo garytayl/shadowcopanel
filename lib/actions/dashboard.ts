@@ -4,6 +4,14 @@ import { ensureConfigured } from "@/lib/actions/guard";
 import { getPublicServerSettings } from "@/lib/env/server";
 import { getGamePortChecks } from "@/lib/ssh/port-check";
 import {
+  computeHealthScore,
+  countDistinctPidsFromPgrep,
+  parseLoad1mRaw,
+  type HealthScoreResult,
+} from "@/lib/reforger/health-score";
+import { analyzeReforgerLogs } from "@/lib/reforger/log-analysis";
+import {
+  getCpuCoreCount,
   getHealthSnapshot,
   getListeningPorts,
   getRecentLogs,
@@ -13,6 +21,8 @@ import {
   startServer,
   stopServer,
 } from "@/lib/ssh/reforger";
+import type { LogAnalysisResult } from "@/lib/reforger/log-analysis";
+import { parseDfRootLine, parseFreeMemM } from "@/lib/utils/dashboard-metrics";
 import { err, ok, type ApiResult } from "@/lib/types/api";
 import type { PortCheck } from "@/lib/types/connectivity";
 
@@ -26,6 +36,12 @@ export type DashboardSnapshot = {
   portCheckSsRaw: string;
   health: { free: string; pgrep: string };
   system: Awaited<ReturnType<typeof getSystemSnapshot>>;
+  /** Structured log diagnostics from a recent tail (null if logs could not be read). */
+  logAnalysis: LogAnalysisResult | null;
+  /** Logical CPUs on the remote host (from `nproc`). */
+  cpuCores: number;
+  /** Combined health score for dashboard hero. */
+  healthScore: HealthScoreResult;
 };
 
 export async function fetchDashboardSnapshot(): Promise<
@@ -35,13 +51,46 @@ export async function fetchDashboardSnapshot(): Promise<
   if (g !== true) return g;
   try {
     const settings = getPublicServerSettings();
-    const [status, ports, portResult, health, system] = await Promise.all([
+    const [status, ports, portResult, health, system, cpuCores] = await Promise.all([
       getServerRuntimeStatus(),
       getListeningPorts(),
       getGamePortChecks(settings.checkPort),
       getHealthSnapshot(),
       getSystemSnapshot(),
+      getCpuCoreCount(),
     ]);
+
+    let logAnalysis: LogAnalysisResult | null = null;
+    try {
+      const tail = await getRecentLogs(400);
+      logAnalysis = analyzeReforgerLogs(tail);
+    } catch {
+      logAnalysis = null;
+    }
+
+    const gameCheck = portResult.checks.find(
+      (c) => c.port === settings.checkPort && c.protocol === "udp",
+    );
+    const a2sCheck = portResult.checks.find((c) => c.port === 17777 && c.protocol === "udp");
+    const gamePortBound = gameCheck?.status === "listening";
+    const a2sPortBound = a2sCheck?.status === "listening";
+
+    const mem = health.free ? parseFreeMemM(health.free) : null;
+    const disk = system.diskRoot ? parseDfRootLine(system.diskRoot) : null;
+    const load1m = parseLoad1mRaw(system.loadavg);
+
+    const healthScore = computeHealthScore({
+      processRunning: status.processRunning,
+      processCount: countDistinctPidsFromPgrep(health.pgrep),
+      gamePortBound,
+      a2sPortBound,
+      logAnalysis,
+      memoryUsedPercent: mem?.usedPct,
+      load1m,
+      diskUsedPercent: disk?.usedPct,
+      cpuCores,
+    });
+
     return ok({
       settings,
       status,
@@ -50,6 +99,9 @@ export async function fetchDashboardSnapshot(): Promise<
       portCheckSsRaw: portResult.ssRaw,
       health,
       system,
+      logAnalysis,
+      cpuCores,
+      healthScore,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

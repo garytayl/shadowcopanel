@@ -3,6 +3,7 @@
 import { ensureConfigured } from "@/lib/actions/guard";
 import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
 import { applyModsMutation } from "@/lib/reforger/mods";
+import { validateModStack, type ModStackValidationResult } from "@/lib/reforger/mod-stack-analysis";
 import type { ConfigNormalizationIssue } from "@/lib/reforger/types";
 import {
   parseConfigJson,
@@ -12,7 +13,6 @@ import {
 import { getRemoteConfigText, saveRemoteConfig } from "@/lib/ssh/reforger";
 import type { RemoteConfigSaveResult } from "@/lib/ssh/reforger";
 import { err, ok, type ApiResult } from "@/lib/types/api";
-
 export type ModRowPayload = {
   modId: string;
   name: string;
@@ -28,6 +28,9 @@ export async function loadModsAction(): Promise<
     gameName: string | null;
     publicAddress: string | null;
     anomalies: ConfigNormalizationIssue[];
+    maxPlayers: number;
+    /** Structural + heuristic validation without Workshop dependency fetches. */
+    modStackValidation: ModStackValidationResult;
   }>
 > {
   const g = ensureConfigured();
@@ -48,6 +51,8 @@ export async function loadModsAction(): Promise<
     const sid = cfg.game?.scenarioId;
     const gname = cfg.game?.name;
     const pub = cfg.publicAddress;
+    const maxPlayers = Math.round(Number(cfg.game?.maxPlayers ?? 64));
+    const modStackValidation = validateModStack(rows, { maxPlayers });
     return ok({
       mods: rows,
       rawConfig,
@@ -55,6 +60,8 @@ export async function loadModsAction(): Promise<
       gameName: gname != null && gname !== "" ? String(gname) : null,
       publicAddress: pub != null && pub !== "" ? String(pub) : null,
       anomalies: norm.issues,
+      maxPlayers,
+      modStackValidation,
     });
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));
@@ -63,6 +70,7 @@ export async function loadModsAction(): Promise<
 
 export async function saveModsAction(
   mods: ModRowPayload[],
+  options?: { allowStackValidationErrors?: boolean },
 ): Promise<ApiResult<RemoteConfigSaveResult>> {
   const g = ensureConfigured();
   if (g !== true) return g;
@@ -70,7 +78,17 @@ export async function saveModsAction(
     const raw = await getRemoteConfigText();
     const p = parseConfigJson(raw);
     if (!p.ok) return err(p.error);
-    const { config, issues } = applyModsMutation(p.value as ReforgerConfig, mods);
+    const cfg0 = p.value as ReforgerConfig;
+    const maxPlayers = Math.round(Number(cfg0.game?.maxPlayers ?? 64));
+    const stackVal = validateModStack(mods, { maxPlayers });
+    const stackBlocking = stackVal.issues.filter((i) => i.severity === "error");
+    if (stackBlocking.length > 0 && !options?.allowStackValidationErrors) {
+      return err(
+        stackBlocking.map((i) => `${i.title}: ${i.message}`).join(" — "),
+      );
+    }
+
+    const { config, issues } = applyModsMutation(cfg0, mods);
     const blocking = issues.filter((i) => i.severity === "error");
     if (blocking.length > 0) {
       return err(blocking.map((i) => i.message).join(" "));

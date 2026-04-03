@@ -18,8 +18,18 @@ import {
   saveModsAction,
   type ModRowPayload,
 } from "@/lib/actions/mods";
+import { actionValidateModStackFull } from "@/lib/actions/mod-stack-validation";
+import {
+  autoCleanModStack,
+  validateModStack,
+  type ModStackValidationResult,
+} from "@/lib/reforger/mod-stack-analysis";
 import { Hint } from "@/components/dashboard/hint";
 import { ConfigAnomalyBanner } from "@/components/panel/config-anomaly-banner";
+import {
+  ModStackValidationPanel,
+  formatModStackSummaryLine,
+} from "@/components/panel/mod-stack-validation-panel";
 import { TitleWithHint } from "@/components/panel/label-with-hint";
 import { downloadTextFile } from "@/lib/utils/download";
 import type { ConfigNormalizationIssue } from "@/lib/reforger/types";
@@ -52,6 +62,10 @@ export function ModsManager() {
   const [anomalies, setAnomalies] = useState<ConfigNormalizationIssue[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [maxPlayers, setMaxPlayers] = useState(64);
+  const [enrichedValidation, setEnrichedValidation] = useState<ModStackValidationResult | null>(null);
+  const [enriching, setEnriching] = useState(false);
+  const [allowSaveDespiteStackErrors, setAllowSaveDespiteStackErrors] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,7 +82,21 @@ export function ModsManager() {
       })),
     );
     setAnomalies(r.data.anomalies);
+    setMaxPlayers(r.data.maxPlayers);
+    setEnrichedValidation(null);
   }, []);
+
+  const liveValidation = useMemo(() => {
+    const payload = rows.map(({ modId, name, version, enabled }) => ({
+      modId,
+      name,
+      version,
+      enabled,
+    }));
+    return validateModStack(payload, { maxPlayers });
+  }, [rows, maxPlayers]);
+
+  const displayValidation = enrichedValidation ?? liveValidation;
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -109,6 +137,9 @@ export function ModsManager() {
         version,
         enabled,
       })),
+      {
+        allowStackValidationErrors: allowSaveDespiteStackErrors,
+      },
     );
     setSaving(false);
     if (!r.ok) {
@@ -123,12 +154,65 @@ export function ModsManager() {
     if (warn.length) {
       toast.message("Normalization", { description: warn.slice(0, 3).map((i) => i.message).join(" · ") });
     }
+    setAllowSaveDespiteStackErrors(false);
     await load();
+  };
+
+  const runDeepCheck = async () => {
+    setEnriching(true);
+    try {
+      const r = await actionValidateModStackFull(
+        rows.map(({ modId, name, version, enabled }) => ({ modId, name, version, enabled })),
+      );
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      setEnrichedValidation(r.data);
+      toast.success(`Workshop check: ${formatModStackSummaryLine(r.data)}`);
+    } finally {
+      setEnriching(false);
+    }
   };
 
   return (
     <div className="space-y-6">
       <ConfigAnomalyBanner issues={anomalies} />
+
+      <ModStackValidationPanel
+        result={displayValidation}
+        loading={loading}
+        title="Mod stack validation"
+        extraActions={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            disabled={enriching || loading}
+            onClick={() => void runDeepCheck()}
+          >
+            {enriching ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+            Deep workshop check
+          </Button>
+        }
+      />
+
+      {liveValidation.summary.errors > 0 ? (
+        <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/[0.06] px-3 py-2 text-xs">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={allowSaveDespiteStackErrors}
+            onChange={(e) => setAllowSaveDespiteStackErrors(e.target.checked)}
+          />
+          <span>
+            Allow saving anyway (server will still reject rows with empty name/version). Only use if you understand
+            the risk.
+          </span>
+        </label>
+      ) : null}
+
       <Alert className="rounded-2xl border-amber-500/40 bg-amber-500/5">
         <AlertTitle>Go easy when adding mods</AlertTitle>
         <AlertDescription>
@@ -151,6 +235,22 @@ export function ModsManager() {
         >
           <Plus className="mr-2 size-4" />
           Add mod
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={saving || loading}
+          onClick={() => {
+            const { rows: cleaned, removedDuplicateIds, removedEmptyRows } = autoCleanModStack(rows);
+            setRows(cleaned);
+            setEnrichedValidation(null);
+            const parts: string[] = [];
+            if (removedDuplicateIds.length) parts.push(`removed ${removedDuplicateIds.length} duplicate ID(s)`);
+            if (removedEmptyRows) parts.push(`removed ${removedEmptyRows} empty row(s)`);
+            toast.message(parts.length ? `Auto-clean: ${parts.join(", ")}` : "Nothing to clean");
+          }}
+        >
+          Auto-clean stack
         </Button>
         <Button
           type="button"

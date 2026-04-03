@@ -2,6 +2,7 @@ import "server-only";
 
 import { requireServerEnv } from "@/lib/env/server";
 import { measureControlLinkRoundTrip, sshExec, sshReadFile, sshWriteFile } from "@/lib/ssh/client";
+import { shSingleQuote } from "@/lib/ssh/orchestration";
 import { backupRemoteConfigBeforeWrite } from "@/lib/reforger/config-backup";
 import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
 import { validateReforgerConfigForWrite } from "@/lib/reforger/config-validate";
@@ -78,10 +79,6 @@ export async function getServerRuntimeStatus(opts?: {
   };
 }
 
-function shSingleQuote(s: string): string {
-  return `'${s.replace(/'/g, `'\\''`)}'`;
-}
-
 export async function startServer(): Promise<{ message: string }> {
   const env = requireServerEnv();
   const session = env.REFORGER_TMUX_SESSION;
@@ -133,6 +130,14 @@ export async function getListeningPorts(): Promise<{ stdout: string; stderr: str
     `ss -tuanp 2>/dev/null | grep -E ${shSingleQuote(`:${port}([^0-9]|$)`)} || true`,
   );
   return { stdout: r.stdout.trim(), stderr: r.stderr.trim() };
+}
+
+/** Logical CPU count for load comparison (defaults to 1). */
+export async function getCpuCoreCount(): Promise<number> {
+  const r = await sshExec("nproc 2>/dev/null || echo 1");
+  const n = Number.parseInt(r.stdout.trim(), 10);
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(256, n);
 }
 
 export async function getHealthSnapshot(): Promise<{

@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, Network, HardDrive, Activity, Radio } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Loader2, Network, HardDrive, Activity, Radio, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   runServerToolAction,
   type ToolKind,
 } from "@/lib/actions/tools";
+import { actionSafeRestart } from "@/lib/actions/safe-restart";
+import { SafeRestartPanel } from "@/components/dashboard/safe-restart-panel";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,6 +18,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { SafeRestartResult } from "@/lib/types/safe-restart";
+
+const LAST_SAFE_RESTART_KEY = "reforger-dashboard-last-safe-restart";
+const LAST_SAFE_RESTART_AT_KEY = "reforger-dashboard-last-safe-restart-at";
 
 const TOOLS: {
   kind: ToolKind;
@@ -52,6 +58,51 @@ const TOOLS: {
 export function ToolsClient() {
   const [running, setRunning] = useState<ToolKind | null>(null);
   const [output, setOutput] = useState<string>("");
+  const [safeRestartLoading, setSafeRestartLoading] = useState(false);
+  const [safeRestartResult, setSafeRestartResult] = useState<SafeRestartResult | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LAST_SAFE_RESTART_KEY);
+      if (raw) setSafeRestartResult(JSON.parse(raw) as SafeRestartResult);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  async function runSafeRestart() {
+    setSafeRestartLoading(true);
+    try {
+      const r = await actionSafeRestart({ reason: "manual" });
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      const data = r.data;
+      setSafeRestartResult(data);
+      try {
+        localStorage.setItem(LAST_SAFE_RESTART_KEY, JSON.stringify(data));
+      } catch {
+        /* ignore */
+      }
+      if (data.level === "success") {
+        try {
+          localStorage.setItem(LAST_SAFE_RESTART_AT_KEY, new Date().toISOString());
+        } catch {
+          /* ignore */
+        }
+      }
+      if (data.level === "failure" || !data.success) {
+        toast.error(data.summary);
+      } else if (data.level === "warning") {
+        toast.message(data.summary);
+      } else {
+        toast.success(data.summary);
+      }
+    } finally {
+      setSafeRestartLoading(false);
+    }
+  }
 
   async function run(kind: ToolKind) {
     setRunning(kind);
@@ -71,6 +122,36 @@ export function ToolsClient() {
 
   return (
     <div className="space-y-6">
+      <Card className="rounded-2xl border-primary/25 bg-gradient-to-br from-primary/[0.06] to-transparent ring-1 ring-primary/15">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <RotateCw className="size-4 text-primary" aria-hidden />
+            Safe restart
+          </CardTitle>
+          <CardDescription>
+            Same orchestration as Home — validate config, stop cleanly, start, verify ports and logs.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button
+            type="button"
+            className="min-h-11 touch-manipulation"
+            disabled={safeRestartLoading}
+            onClick={() => void runSafeRestart()}
+          >
+            {safeRestartLoading ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <RotateCw className="mr-2 size-4" aria-hidden />
+            )}
+            Run Safe Restart
+          </Button>
+          {safeRestartResult ? (
+            <SafeRestartPanel result={safeRestartResult} checkPort={2001} />
+          ) : null}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 sm:grid-cols-2">
         {TOOLS.map(({ kind, label, description, icon: Icon }) => (
           <Card key={kind} className="rounded-2xl border-border/80">

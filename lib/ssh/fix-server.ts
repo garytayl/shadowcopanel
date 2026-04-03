@@ -4,8 +4,15 @@ import { getPublicServerSettings, requireServerEnv } from "@/lib/env/server";
 import { applyFixServerDefaults } from "@/lib/reforger/fix-server-defaults";
 import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
 import { validateReforgerConfigForFixServer } from "@/lib/reforger/config-validate";
-import { getRemoteConfigText, saveRemoteConfig, startServer } from "@/lib/ssh/reforger";
+import { analyzeReforgerLogs } from "@/lib/reforger/log-analysis";
+import {
+  killRefogerProcessesPgrep,
+  killTmuxSessionLoose,
+  shSingleQuote,
+} from "@/lib/ssh/orchestration";
+import { getRecentLogs, getRemoteConfigText, saveRemoteConfig, startServer } from "@/lib/ssh/reforger";
 import { sshExec } from "@/lib/ssh/client";
+import type { LogAnalysisResult } from "@/lib/reforger/log-analysis";
 import type {
   FixServerDiagnostics,
   FixServerResult,
@@ -13,17 +20,6 @@ import type {
   FixServerStep,
 } from "@/lib/types/fix-server";
 import { parseConfigJson, type ReforgerConfig } from "@/lib/types/reforger-config";
-
-function shSingleQuote(s: string): string {
-  return `'${s.replace(/'/g, `'\\''`)}'`;
-}
-
-function parseCountMarker(stdout: string, key: string): number | null {
-  const m = stdout.match(new RegExp(`${key}=(\\d+)`, "m"));
-  if (!m) return null;
-  const n = Number.parseInt(m[1], 10);
-  return Number.isFinite(n) ? n : null;
-}
 
 function emptyDiagnostics(): FixServerDiagnostics {
   return {
@@ -42,6 +38,7 @@ function buildResult(
   steps: FixServerStep[],
   diagnostics: FixServerDiagnostics,
   whatWasFixed?: string[],
+  logAnalysis?: LogAnalysisResult,
 ): FixServerResult {
   return {
     success: level !== "failure",
@@ -50,6 +47,7 @@ function buildResult(
     steps,
     diagnostics,
     whatWasFixed,
+    logAnalysis,
   };
 }
 
@@ -111,24 +109,15 @@ export async function runFixServerPipeline(): Promise<FixServerResult> {
 
   // --- Destructive + save (config known good) ---
 
-  const killScript = [
-    "set +e",
-    "UC=$( (pgrep -f ArmaReforgerServer 2>/dev/null; pgrep -f enfMain 2>/dev/null) | sort -u | wc -l | tr -d '[:space:]')",
-    'printf "REFORGER_FIX_PCOUNT=%s\\n" "${UC:-0}"',
-    "pkill -f ArmaReforgerServer 2>/dev/null || true",
-    "pkill -f enfMain 2>/dev/null || true",
-  ].join("\n");
-
-  let killOut: Awaited<ReturnType<typeof sshExec>>;
+  let pcount = 0;
   try {
-    killOut = await sshExec(killScript);
+    const k = await killRefogerProcessesPgrep();
+    pcount = k.pidCount;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     push("Kill stuck processes", "fail", msg);
     return buildResult("failure", "Repair failed — see details", steps, diag, whatWasFixed);
   }
-
-  const pcount = parseCountMarker(killOut.stdout, "REFORGER_FIX_PCOUNT") ?? 0;
   diag.processesFound = pcount;
   diag.processesCleaned = pcount > 0;
   push(
@@ -146,7 +135,7 @@ export async function runFixServerPipeline(): Promise<FixServerResult> {
   }
 
   try {
-    await sshExec(`tmux kill-session -t ${shSingleQuote(session)} 2>/dev/null || true`);
+    await killTmuxSessionLoose(session);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     push("Reset tmux session", "fail", msg);
@@ -219,6 +208,31 @@ export async function runFixServerPipeline(): Promise<FixServerResult> {
 
   const allGreen = diag.processRunning && diag.portsOpen && diag.tmuxSessionPresent;
 
+  let logTailAnalysis: LogAnalysisResult | undefined;
+  try {
+    const tail = await getRecentLogs(450);
+    logTailAnalysis = analyzeReforgerLogs(tail);
+    const hi = logTailAnalysis.summary.highestSeverity;
+    if (hi === "none") {
+      push("Log pattern check", "ok", "No known failure patterns in recent log tail.");
+    } else if (logTailAnalysis.summary.hasFatal || hi === "critical" || hi === "error") {
+      push(
+        "Log pattern check",
+        "warn",
+        `${logTailAnalysis.summary.totalIssues} pattern(s) — highest: ${hi}.`,
+      );
+    } else {
+      push(
+        "Log pattern check",
+        "warn",
+        `${logTailAnalysis.summary.totalIssues} pattern(s) (${hi}) — review below.`,
+      );
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    push("Log pattern check", "warn", `Could not read logs: ${msg}`);
+  }
+
   if (allGreen) {
     return buildResult(
       "success",
@@ -226,6 +240,7 @@ export async function runFixServerPipeline(): Promise<FixServerResult> {
       steps,
       diag,
       whatWasFixed,
+      logTailAnalysis,
     );
   }
 
@@ -235,6 +250,7 @@ export async function runFixServerPipeline(): Promise<FixServerResult> {
     steps,
     diag,
     whatWasFixed,
+    logTailAnalysis,
   );
 }
 

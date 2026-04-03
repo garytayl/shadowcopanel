@@ -1,3 +1,5 @@
+import type { LogAnalysisResult } from "@/lib/reforger/log-analysis";
+
 export type FixServerStepStatus = "ok" | "warn" | "fail";
 
 export type FixServerStep = {
@@ -26,4 +28,6 @@ export type FixServerResult = {
   diagnostics: FixServerDiagnostics;
   /** Human-readable fixes applied (normalization + defaults). */
   whatWasFixed?: string[];
+  /** Tail of server logs analyzed after repair (optional). */
+  logAnalysis?: LogAnalysisResult;
 };

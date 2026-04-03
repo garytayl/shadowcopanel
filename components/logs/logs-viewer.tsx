@@ -6,7 +6,9 @@ import { Download, Filter, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Hint } from "@/components/dashboard/hint";
+import { LogAnalysisCard } from "@/components/panel/log-analysis-card";
 import { fetchLogsAction, type LogHealthSummary } from "@/lib/actions/logs";
+import type { LogAnalysisResult } from "@/lib/reforger/log-analysis";
 import { downloadTextFile } from "@/lib/utils/download";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,6 +33,7 @@ const FILTERS = [
 export function LogsViewer() {
   const [text, setText] = useState("");
   const [health, setHealth] = useState<LogHealthSummary | null>(null);
+  const [analysis, setAnalysis] = useState<LogAnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
@@ -45,6 +48,7 @@ export function LogsViewer() {
     }
     setText(r.data.text);
     setHealth(r.data.health);
+    setAnalysis(r.data.analysis);
   }, []);
 
   useEffect(() => {
@@ -123,25 +127,18 @@ export function LogsViewer() {
       </div>
 
       {health ? (
-        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="rounded-2xl border-border/80">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-base">
-                Quick health hints
-                <Hint label="Rough counts and guesses from the text you’re looking at—handy for spotting trouble, not a guarantee." />
-              </CardTitle>
-              <CardDescription>Automatic guesses from the text on screen—not a substitute for reading the log</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              <Badge variant="secondary">ERROR-ish lines: {health.errorCount}</Badge>
-              <Badge variant="secondary">WARN-ish lines: {health.warnCount}</Badge>
-              {health.hints.map((h) => (
-                <Badge key={h} variant="outline" className="text-amber-200">
-                  {h}
-                </Badge>
-              ))}
-            </CardContent>
-          </Card>
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="secondary">Lines with “error”: {health.errorCount}</Badge>
+            <Badge variant="secondary">Lines with “warn”: {health.warnCount}</Badge>
+          </div>
+          {analysis ? (
+            <LogAnalysisCard
+              analysis={analysis}
+              title="Detected issues"
+              description="Rule-based signals from this log tail — read the raw log below for full context."
+            />
+          ) : null}
         </motion.div>
       ) : null}
 

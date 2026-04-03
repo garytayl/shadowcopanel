@@ -15,6 +15,7 @@ import {
   Play,
   Power,
   RefreshCw,
+  RotateCw,
   ScrollText,
   Server,
   Timer,
@@ -34,7 +35,10 @@ import {
   type DashboardSnapshot,
 } from "@/lib/actions/dashboard";
 import { actionFixServer } from "@/lib/actions/fix-server";
+import { actionSafeRestart } from "@/lib/actions/safe-restart";
+import { SafeRestartPanel } from "@/components/dashboard/safe-restart-panel";
 import type { FixServerResult } from "@/lib/types/fix-server";
+import type { SafeRestartReason, SafeRestartResult } from "@/lib/types/safe-restart";
 import {
   actionRunJoinabilityCheck,
   actionSyncPublicAddressToPanelHost,
@@ -50,7 +54,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConnectivitySection } from "@/components/dashboard/connectivity-section";
+import { HealthScoreCard } from "@/components/dashboard/health-score-card";
 import { Hint } from "@/components/dashboard/hint";
+import { LogAnalysisCard } from "@/components/panel/log-analysis-card";
+import { ModStackValidationPanel } from "@/components/panel/mod-stack-validation-panel";
+import type { ModStackValidationResult } from "@/lib/reforger/mod-stack-analysis";
 import {
   readControlLinkHistory,
   recordControlLinkSample,
@@ -61,6 +69,8 @@ import { cn } from "@/lib/utils";
 const AUTO_REFRESH_KEY = "reforger-dashboard-auto-refresh";
 const STICKY_NOTES_KEY = "reforger-dashboard-sticky-notes";
 const LAST_FIX_KEY = "reforger-dashboard-last-fix";
+const LAST_SAFE_RESTART_KEY = "reforger-dashboard-last-safe-restart";
+const LAST_SAFE_RESTART_AT_KEY = "reforger-dashboard-last-safe-restart-at";
 
 function safeDashboardExport(snap: DashboardSnapshot) {
   const { privateKeyPath: _pk, ...settingsRest } = snap.settings;
@@ -75,6 +85,9 @@ function safeDashboardExport(snap: DashboardSnapshot) {
     portCheckSsRaw: snap.portCheckSsRaw,
     health: snap.health,
     system: snap.system,
+    logAnalysis: snap.logAnalysis,
+    healthScore: snap.healthScore,
+    cpuCores: snap.cpuCores,
   };
 }
 
@@ -128,6 +141,7 @@ export function DashboardClient() {
   const [actionKey, setActionKey] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
   const [stickyNotes, setStickyNotes] = useState("");
   const [modCount, setModCount] = useState<number | null>(null);
   const [scenarioId, setScenarioId] = useState<string | null>(null);
@@ -138,6 +152,10 @@ export function DashboardClient() {
   const [joinLoading, setJoinLoading] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
   const [lastFix, setLastFix] = useState<FixServerResult | null>(null);
+  const [lastSafeRestart, setLastSafeRestart] = useState<SafeRestartResult | null>(null);
+  const [lastSafeRestartAt, setLastSafeRestartAt] = useState<string | null>(null);
+  const [safeRestartReason, setSafeRestartReason] = useState<SafeRestartReason>("manual");
+  const [modStackValidation, setModStackValidation] = useState<ModStackValidationResult | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -150,6 +168,7 @@ export function DashboardClient() {
     setSnap(r.data);
     setJoinResult(null);
     setLastRefresh(new Date());
+    setRefreshTick((t) => t + 1);
     if (typeof r.data.status.controlLinkRoundTripMs === "number") {
       recordControlLinkSample(r.data.status.controlLinkRoundTripMs);
       setLatencyHistory(readControlLinkHistory());
@@ -159,11 +178,13 @@ export function DashboardClient() {
       setScenarioId(modsR.data.scenarioId);
       setGameName(modsR.data.gameName);
       setPublicAddr(modsR.data.publicAddress);
+      setModStackValidation(modsR.data.modStackValidation);
     } else {
       setModCount(null);
       setScenarioId(null);
       setGameName(null);
       setPublicAddr(null);
+      setModStackValidation(null);
     }
   }, []);
 
@@ -190,6 +211,17 @@ export function DashboardClient() {
     } catch {
       /* ignore */
     }
+    try {
+      const raw = localStorage.getItem(LAST_SAFE_RESTART_KEY);
+      if (raw) setLastSafeRestart(JSON.parse(raw) as SafeRestartResult);
+    } catch {
+      /* ignore */
+    }
+    try {
+      setLastSafeRestartAt(localStorage.getItem(LAST_SAFE_RESTART_AT_KEY));
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   useEffect(() => {
@@ -210,6 +242,45 @@ export function DashboardClient() {
     const id = window.setInterval(() => void refresh(), 30_000);
     return () => window.clearInterval(id);
   }, [autoRefresh, refresh]);
+
+  async function runSafeRestartAction() {
+    setActionKey("safe-restart");
+    try {
+      const r = await actionSafeRestart({ reason: safeRestartReason });
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      const data = r.data;
+      setLastSafeRestart(data);
+      try {
+        localStorage.setItem(LAST_SAFE_RESTART_KEY, JSON.stringify(data));
+      } catch {
+        /* ignore */
+      }
+      if (data.level === "success") {
+        const at = new Date().toISOString();
+        setLastSafeRestartAt(at);
+        try {
+          localStorage.setItem(LAST_SAFE_RESTART_AT_KEY, at);
+        } catch {
+          /* ignore */
+        }
+      }
+      if (data.level === "failure" || !data.success) {
+        toast.error(data.summary);
+      } else if (data.level === "warning") {
+        toast.message(data.summary, {
+          description: "Open the Safe restart panel below for full steps.",
+        });
+      } else {
+        toast.success(data.summary);
+      }
+      await refresh();
+    } finally {
+      setActionKey(null);
+    }
+  }
 
   async function runFixServerAction() {
     setActionKey("fix");
@@ -404,6 +475,23 @@ export function DashboardClient() {
         </div>
       </section>
 
+      <HealthScoreCard
+        healthScore={snap?.healthScore}
+        loading={loading}
+        refreshTick={refreshTick}
+      />
+
+      {modStackValidation && modStackValidation.issues.length > 0 ? (
+        <div className="space-y-1.5">
+          <ModStackValidationPanel compact title="Mod stack (saved)" result={modStackValidation} />
+          <p className="text-center text-[11px] text-muted-foreground">
+            <Link href="/mods" className="font-medium text-primary underline underline-offset-2">
+              Open Mods to fix load order or duplicates
+            </Link>
+          </p>
+        </div>
+      ) : null}
+
       {/* Primary metrics */}
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
@@ -448,6 +536,24 @@ export function DashboardClient() {
           </span>
         </StatCard>
       </section>
+
+      {snap?.logAnalysis && snap.logAnalysis.issues.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Log signals (recent tail)
+          </p>
+          <LogAnalysisCard
+            analysis={snap.logAnalysis}
+            compact
+            title="Detected issues"
+            description="From the latest log tail fetched with Home refresh — open Logs for the full file."
+          />
+        </div>
+      ) : snap?.logAnalysis && snap.logAnalysis.summary.highestSeverity === "none" ? (
+        <p className="text-xs text-muted-foreground">
+          Recent log tail: no known failure patterns matched.
+        </p>
+      ) : null}
 
       <ConnectivitySection
         snap={snap}
@@ -576,7 +682,73 @@ export function DashboardClient() {
           <Hint label="Recovery pass: checks your config first, then clears stuck game processes and the background session, saves a cleaned config (with backup), and starts the server the same way as Start. Not the same as Restart—built for messy or half-crashed states. Safe to run more than once." />
           <span>Repair + stabilize when things feel stuck (not a plain restart).</span>
         </p>
+
+        {modStackValidation && modStackValidation.summary.errors > 0 ? (
+          <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
+            Saved mod stack has validation errors ({modStackValidation.summary.errors}) — clean it up on the Mods
+            page before expecting a reliable boot after repair or safe restart.
+          </p>
+        ) : null}
+
+        <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.06] to-transparent p-4 shadow-sm ring-1 ring-primary/10">
+          <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold tracking-tight text-foreground">Safe restart</p>
+              <p className="mt-0.5 max-w-xl text-[11px] leading-relaxed text-muted-foreground">
+                Validates config, writes a normalized file if needed, stops cleanly, then starts fresh and verifies
+                process, tmux, and UDP ports — idempotent.
+              </p>
+              {lastSafeRestartAt ? (
+                <p className="mt-2 text-[10px] text-muted-foreground">
+                  Last successful restart:{" "}
+                  <span className="font-mono text-foreground/90">
+                    {new Date(lastSafeRestartAt).toLocaleString()}
+                  </span>
+                </p>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <Label htmlFor="safe-restart-reason" className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Reason (tracking)
+              </Label>
+              <select
+                id="safe-restart-reason"
+                className="h-11 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm sm:max-w-xs"
+                value={safeRestartReason}
+                disabled={!!actionKey}
+                onChange={(e) => setSafeRestartReason(e.target.value as SafeRestartReason)}
+              >
+                <option value="manual">Manual</option>
+                <option value="after_config_save">After config save</option>
+                <option value="after_mod_change">After mod change</option>
+                <option value="after_repair">After repair</option>
+              </select>
+            </div>
+            <Button
+              className="h-11 min-h-11 shrink-0 touch-manipulation bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={() => void runSafeRestartAction()}
+              disabled={!!actionKey || !s?.configured}
+            >
+              {actionKey === "safe-restart" ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <RotateCw className="mr-2 size-4" aria-hidden />
+              )}
+              Safe Restart
+            </Button>
+          </div>
+          <p className="mt-2 flex items-start gap-1.5 text-[10px] text-muted-foreground">
+            <Hint label="Not the same as the plain Restart button — this pipeline refuses bad JSON, persists normalization, stops processes until gone, then starts and checks UDP game + A2S ports plus log patterns." />
+            <span>Controlled orchestration — safe to run repeatedly.</span>
+          </p>
+        </div>
       </section>
+
+      {lastSafeRestart ? (
+        <SafeRestartPanel result={lastSafeRestart} checkPort={s?.checkPort ?? 2001} />
+      ) : null}
 
       {lastFix ? (
         <details className="rounded-2xl border border-border/70 bg-muted/10 px-4 py-3 open:bg-muted/15">
@@ -632,6 +804,16 @@ export function DashboardClient() {
                 ))}
               </ul>
             </div>
+            {lastFix.logAnalysis ? (
+              <div className="border-t border-border/50 pt-3">
+                <LogAnalysisCard
+                  analysis={lastFix.logAnalysis}
+                  compact
+                  title="Log check after repair"
+                  description="Patterns found in the log tail immediately after this run."
+                />
+              </div>
+            ) : null}
             <p className="font-mono text-[10px] text-muted-foreground">
               Processes: {lastFix.diagnostics.processesFound} found · cleaned:{" "}
               {lastFix.diagnostics.processesCleaned ? "yes" : "no"} · tmux reset:{" "}

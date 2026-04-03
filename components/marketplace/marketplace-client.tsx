@@ -24,8 +24,18 @@ import {
   saveModsAction,
   type ModRowPayload,
 } from "@/lib/actions/mods";
+import { actionValidateModStackFull } from "@/lib/actions/mod-stack-validation";
+import {
+  catalogMapFromMods,
+  validateModStack,
+  type ModStackValidationResult,
+} from "@/lib/reforger/mod-stack-analysis";
 import { Hint } from "@/components/dashboard/hint";
 import { ConfigAnomalyBanner } from "@/components/panel/config-anomaly-banner";
+import {
+  ModStackValidationPanel,
+  formatModStackSummaryLine,
+} from "@/components/panel/mod-stack-validation-panel";
 import { TitleWithHint } from "@/components/panel/label-with-hint";
 import { downloadTextFile } from "@/lib/utils/download";
 import type { ConfigNormalizationIssue } from "@/lib/reforger/types";
@@ -132,6 +142,10 @@ export function MarketplaceClient() {
   const [stackLoading, setStackLoading] = useState(true);
   const [stackAnomalies, setStackAnomalies] = useState<ConfigNormalizationIssue[]>([]);
   const [saving, setSaving] = useState(false);
+  const [maxPlayers, setMaxPlayers] = useState(64);
+  const [enrichedValidation, setEnrichedValidation] = useState<ModStackValidationResult | null>(null);
+  const [enriching, setEnriching] = useState(false);
+  const [allowSaveDespiteStackErrors, setAllowSaveDespiteStackErrors] = useState(false);
 
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -155,6 +169,16 @@ export function MarketplaceClient() {
   const stackSig = useMemo(() => signature(rowsToPayload(stack)), [stack]);
   const dirty = stackSig !== remoteSig && !stackLoading;
 
+  const liveValidation = useMemo(
+    () => validateModStack(rowsToPayload(stack), { maxPlayers }),
+    [stack, maxPlayers],
+  );
+  const displayValidation = enrichedValidation ?? liveValidation;
+
+  useEffect(() => {
+    setEnrichedValidation(null);
+  }, [stackSig]);
+
   const loadStack = useCallback(async () => {
     setStackLoading(true);
     const r = await loadModsAction();
@@ -167,6 +191,8 @@ export function MarketplaceClient() {
     setStack(rows);
     setRemoteSig(signature(r.data.mods));
     setStackAnomalies(r.data.anomalies);
+    setMaxPlayers(r.data.maxPlayers);
+    setEnrichedValidation(null);
   }, []);
 
   useEffect(() => {
@@ -235,6 +261,14 @@ export function MarketplaceClient() {
       toast.error("That mod is already in the server stack");
       return;
     }
+    const nextPayload = [
+      ...rowsToPayload(stack),
+      { modId: m.modId, name: m.name, version: m.version ?? "", enabled: true },
+    ];
+    const preview = validateModStack(nextPayload, {
+      maxPlayers,
+      catalogByModId: catalogMapFromMods([m]),
+    });
     setStack((prev) => [
       ...prev,
       {
@@ -245,7 +279,15 @@ export function MarketplaceClient() {
         enabled: true,
       },
     ]);
-    toast.success("Added to stack");
+    const errs = preview.issues.filter((i) => i.severity === "error");
+    const warns = preview.issues.filter((i) => i.severity === "warn");
+    if (errs.length) {
+      toast.error(errs[0]?.title ?? "Stack issue", { description: errs[0]?.message });
+    } else if (warns.length) {
+      toast.message("Added — review warnings", { description: formatModStackSummaryLine(preview) });
+    } else {
+      toast.success("Added to stack");
+    }
   }
 
   function addWithDependencies(detail: WorkshopCatalogMod) {
@@ -276,13 +318,30 @@ export function MarketplaceClient() {
       });
       return;
     }
+    const nextPayload = [...rowsToPayload(stack), ...toAppend];
+    const preview = validateModStack(nextPayload, {
+      maxPlayers,
+      catalogByModId: catalogMapFromMods([detail]),
+    });
     setStack((prev) => [...prev, ...toAppend.map((m) => ({ ...m, key: uid() }))]);
-    toast.success(`Added ${toAppend.length} mod(s) to stack`);
+    const errs = preview.issues.filter((i) => i.severity === "error");
+    const warns = preview.issues.filter((i) => i.severity === "warn");
+    if (errs.length) {
+      toast.error(errs[0]?.title ?? "Stack issue", { description: errs[0]?.message });
+    } else if (warns.length) {
+      toast.message(`Added ${toAppend.length} mod(s) — check warnings`, {
+        description: formatModStackSummaryLine(preview),
+      });
+    } else {
+      toast.success(`Added ${toAppend.length} mod(s) to stack`);
+    }
   }
 
   async function saveStack() {
     setSaving(true);
-    const r = await saveModsAction(rowsToPayload(stack));
+    const r = await saveModsAction(rowsToPayload(stack), {
+      allowStackValidationErrors: allowSaveDespiteStackErrors,
+    });
     setSaving(false);
     if (!r.ok) {
       toast.error(r.error);
@@ -296,7 +355,23 @@ export function MarketplaceClient() {
     if (warn.length) {
       toast.message("Normalization", { description: warn.slice(0, 3).map((i) => i.message).join(" · ") });
     }
+    setAllowSaveDespiteStackErrors(false);
     await loadStack();
+  }
+
+  async function runDeepStackCheck() {
+    setEnriching(true);
+    try {
+      const r = await actionValidateModStackFull(rowsToPayload(stack));
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      setEnrichedValidation(r.data);
+      toast.success(`Workshop check: ${formatModStackSummaryLine(r.data)}`);
+    } finally {
+      setEnriching(false);
+    }
   }
 
   function restoreRemote() {
@@ -831,6 +906,35 @@ export function MarketplaceClient() {
                 </p>
               ) : (
                 <>
+                  <ModStackValidationPanel
+                    result={displayValidation}
+                    loading={stackLoading}
+                    title="Stack validation"
+                    extraActions={
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        disabled={enriching}
+                        onClick={() => void runDeepStackCheck()}
+                      >
+                        {enriching ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+                        Deep check
+                      </Button>
+                    }
+                  />
+                  {liveValidation.summary.errors > 0 ? (
+                    <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/[0.06] px-3 py-2 text-xs">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={allowSaveDespiteStackErrors}
+                        onChange={(e) => setAllowSaveDespiteStackErrors(e.target.checked)}
+                      />
+                      <span>Allow save despite stack errors (risky)</span>
+                    </label>
+                  ) : null}
                   <Button
                     type="button"
                     className="h-11 w-full touch-manipulation"
