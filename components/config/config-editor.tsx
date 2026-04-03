@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { FileDown, Images, Loader2, Save, Download } from "lucide-react";
 import { toast } from "sonner";
@@ -65,7 +65,7 @@ export function ConfigEditor() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     setLoading(true);
     const r = await loadRemoteConfigAction();
     setLoading(false);
@@ -76,8 +76,14 @@ export function ConfigEditor() {
     setBase(r.data.parsed);
     setForm(r.data.form);
     setRaw(r.data.raw);
-    toast.success("Loaded remote config");
+    if (!opts?.silent) {
+      toast.success("Loaded remote config");
+    }
   }, []);
+
+  useEffect(() => {
+    void load({ silent: true });
+  }, [load]);
 
   const saveForm = async () => {
     if (!base) {

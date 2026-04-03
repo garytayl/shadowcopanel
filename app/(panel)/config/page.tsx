@@ -11,9 +11,10 @@ export default function ConfigPage() {
       >
         <InPlainEnglish title="What you’re editing">
           <p>
-            The game reads a file named <strong>config.json</strong> on your cloud machine. “Load”
-            downloads the current file; “Save” uploads your changes. If you’re unsure, use the form—only
-            switch to raw JSON if you know what you’re doing.
+            The game reads a file named <strong>config.json</strong> on your cloud machine. This page
+            loads that file automatically when you open it; use “Load current file from server” to refresh
+            after changes elsewhere. “Save” uploads your edits. If you’re unsure, use the form—only switch
+            to raw JSON if you know what you’re doing.
           </p>
         </InPlainEnglish>
       </PageHeader>
