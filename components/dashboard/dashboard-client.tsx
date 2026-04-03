@@ -5,11 +5,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
-  ArrowUpRight,
   ClipboardCopy,
   Cpu,
   Download,
   EthernetPort,
+  FlaskConical,
+  HardDrive,
   Loader2,
   Megaphone,
   Play,
@@ -50,12 +51,20 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConnectivitySection } from "@/components/dashboard/connectivity-section";
+import { ActivityLatestStrip } from "@/components/dashboard/activity-latest-strip";
 import { HealthScoreCard } from "@/components/dashboard/health-score-card";
-import { Hint } from "@/components/dashboard/hint";
 import { LogAnalysisCard } from "@/components/panel/log-analysis-card";
 import { ModStackValidationPanel } from "@/components/panel/mod-stack-validation-panel";
 import type { ModStackValidationResult } from "@/lib/reforger/mod-stack-analysis";
@@ -64,6 +73,7 @@ import {
   recordControlLinkSample,
 } from "@/components/dashboard/latency-sparkline";
 import { PowerOrb, type PowerOrbPhase } from "@/components/dashboard/power-orb";
+import { parseDfRootLine, parseFreeMemM, parseLoad1m } from "@/lib/utils/dashboard-metrics";
 import { cn } from "@/lib/utils";
 
 const AUTO_REFRESH_KEY = "reforger-dashboard-auto-refresh";
@@ -91,6 +101,20 @@ function safeDashboardExport(snap: DashboardSnapshot) {
   };
 }
 
+function deriveServerStatusDisplay(
+  loading: boolean,
+  snap: DashboardSnapshot | null,
+  st: DashboardSnapshot["status"] | undefined,
+): { headline: string; tone: "green" | "red" | "amber" | "muted" } {
+  if (loading && !snap) return { headline: "LOADING", tone: "muted" };
+  if (!st) return { headline: "UNKNOWN", tone: "muted" };
+  if (!snap?.settings?.configured) return { headline: "ERROR", tone: "amber" };
+  if (!st.sshReachable) return { headline: "ERROR", tone: "amber" };
+  if (st.serverLikelyUp) return { headline: "RUNNING", tone: "green" };
+  if (st.tmuxSessionExists || st.processRunning) return { headline: "PARTIAL", tone: "amber" };
+  return { headline: "STOPPED", tone: "red" };
+}
+
 function derivePhase(
   loading: boolean,
   actionKey: string | null,
@@ -106,30 +130,30 @@ function derivePhase(
   return "stopped";
 }
 
-function StatCard({
+function MetricTile({
   icon: Icon,
   label,
-  hint,
   children,
   className,
 }: {
   icon: LucideIcon;
   label: string;
-  hint?: string;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
-    <Card className={className}>
-      <CardContent className="flex flex-col gap-2 p-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            <Icon className="size-3.5 text-primary/90" aria-hidden />
-            {label}
-            {hint ? <Hint label={hint} /> : null}
-          </div>
+    <Card
+      className={cn(
+        "rounded-2xl border-border/70 bg-gradient-to-br from-card/80 to-muted/5 shadow-sm transition-colors hover:border-border",
+        className,
+      )}
+    >
+      <CardContent className="flex flex-col gap-1.5 p-4">
+        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <Icon className="size-3.5 text-primary/85" aria-hidden />
+          {label}
         </div>
-        <div className="min-h-[2rem] text-sm font-medium leading-snug text-foreground">{children}</div>
+        <div className="min-h-[2rem] text-lg font-semibold tabular-nums tracking-tight text-foreground">{children}</div>
       </CardContent>
     </Card>
   );
@@ -156,6 +180,7 @@ export function DashboardClient() {
   const [lastSafeRestartAt, setLastSafeRestartAt] = useState<string | null>(null);
   const [safeRestartReason, setSafeRestartReason] = useState<SafeRestartReason>("manual");
   const [modStackValidation, setModStackValidation] = useState<ModStackValidationResult | null>(null);
+  const [safeRestartOpen, setSafeRestartOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -375,6 +400,42 @@ export function DashboardClient() {
   const publicMatch =
     publicAddr && s?.host ? hostsEffectivelyMatch(publicAddr, s.host) : null;
 
+  const mem = useMemo(
+    () => (snap?.health?.free ? parseFreeMemM(snap.health.free) : null),
+    [snap?.health?.free],
+  );
+  const disk = useMemo(
+    () => (snap?.system?.diskRoot ? parseDfRootLine(snap.system.diskRoot) : null),
+    [snap?.system?.diskRoot],
+  );
+  const load = useMemo(
+    () => (snap?.system?.loadavg ? parseLoad1m(snap.system.loadavg) : null),
+    [snap?.system?.loadavg],
+  );
+
+  const statusDisplay = useMemo(
+    () => deriveServerStatusDisplay(loading, snap, st),
+    [loading, snap, st],
+  );
+
+  const powerActionLabel =
+    phase === "running"
+      ? "Stop server"
+      : phase === "stopped"
+        ? "Start server"
+        : phase === "degraded"
+          ? "Restart server"
+          : undefined;
+
+  const statusHeadlineClass =
+    statusDisplay.tone === "green"
+      ? "text-emerald-400 drop-shadow-[0_0_28px_rgba(52,211,153,0.4)]"
+      : statusDisplay.tone === "red"
+        ? "text-red-400 drop-shadow-[0_0_22px_rgba(248,113,113,0.3)]"
+        : statusDisplay.tone === "amber"
+          ? "text-amber-400 drop-shadow-[0_0_22px_rgba(251,191,36,0.3)]"
+          : "text-muted-foreground";
+
   return (
     <div className="space-y-6 md:space-y-8">
       {s?.announcement ? (
@@ -385,93 +446,102 @@ export function DashboardClient() {
         </Alert>
       ) : null}
 
-      {/* Command header */}
-      <section className="relative overflow-hidden rounded-2xl border border-border/70 bg-card/40 p-4 shadow-sm ring-1 ring-primary/5 md:p-6">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 flex-1 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="truncate text-xl font-semibold tracking-tight md:text-2xl">{serverTitle}</h2>
-              {st?.sshReachable ? (
-                <Badge variant="default" className="font-normal">
-                  Control link
-                </Badge>
-              ) : (
-                <Badge variant="secondary">Offline</Badge>
-              )}
-              <Hint label="Green = this website can reach your cloud PC. Red/Offline = we couldn’t connect (wrong IP, firewall, or key). That’s about our link to the machine—not whether a player can join the game." />
-              {st?.serverLikelyUp ? (
-                <Badge variant="outline" className="border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
-                  Process
-                </Badge>
-              ) : null}
-              {st?.serverLikelyUp ? (
-                <Hint label="We think the Reforger game process is actually running. If that feels wrong, open Diagnostics for more detail." />
-              ) : null}
+      {/* Hero — status + power */}
+      <section className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-b from-zinc-900/90 via-card to-zinc-950/95 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_24px_80px_-24px_rgba(0,0,0,0.55)] ring-1 ring-primary/10 md:p-10">
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(34,197,94,0.12),transparent)]"
+          aria-hidden
+        />
+        <div className="relative flex flex-col gap-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 text-center sm:text-left">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+                {serverTitle}
+              </p>
+              <p className="mt-1 text-[10px] text-muted-foreground/90">
+                {lastRefresh ? lastRefresh.toLocaleTimeString() : "—"}
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {lastRefresh ? <>Updated {lastRefresh.toLocaleTimeString()}</> : "—"}
-            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-end">
+              <div className="flex items-center gap-1.5 rounded-full border border-border/50 bg-background/40 px-2.5 py-1.5">
+                <Switch id="auto-refresh" checked={autoRefresh} onCheckedChange={setAutoRefresh} size="sm" />
+                <Label htmlFor="auto-refresh" className="text-[10px] font-medium text-muted-foreground">
+                  30s
+                </Label>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full border-border/60"
+                onClick={() => void refresh()}
+                disabled={loading}
+              >
+                {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
+                Refresh
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="rounded-full"
+                title="Export snapshot JSON"
+                onClick={() => {
+                  if (!snap) {
+                    toast.error("Nothing to export yet");
+                    return;
+                  }
+                  const json = JSON.stringify(safeDashboardExport(snap), null, 2);
+                  const blob = new Blob([json], { type: "application/json" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `reforger-dashboard-${Date.now()}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast.success("Snapshot downloaded");
+                }}
+                disabled={loading || !snap}
+              >
+                <Download className="size-4" />
+              </Button>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-2 lg:justify-end">
-            <div className="flex items-center gap-1.5 rounded-xl border border-border/60 bg-muted/20 px-2 py-1.5">
-              <Switch id="auto-refresh" checked={autoRefresh} onCheckedChange={setAutoRefresh} size="sm" />
-              <Label htmlFor="auto-refresh" className="text-[11px] font-normal">
-                30s
-              </Label>
-              <Hint label="Auto-refresh: this page checks your server every 30 seconds while you’re on it. It doesn’t restart anything—just updates what you see." />
+          <div className="flex flex-col items-center gap-6 md:gap-8">
+            <div className="text-center">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-muted-foreground">
+                Server status
+              </p>
+              <p
+                className={cn(
+                  "mt-2 font-mono text-4xl font-black tracking-tight sm:text-5xl md:text-6xl",
+                  statusHeadlineClass,
+                )}
+              >
+                {statusDisplay.headline}
+              </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="min-h-10 touch-manipulation"
-              onClick={() => void refresh()}
-              disabled={loading}
-            >
-              {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
-              Refresh
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="min-h-10 min-w-10 touch-manipulation"
-              title="Export snapshot JSON"
-              onClick={() => {
-                if (!snap) {
-                  toast.error("Nothing to export yet");
-                  return;
-                }
-                const json = JSON.stringify(safeDashboardExport(snap), null, 2);
-                const blob = new Blob([json], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `reforger-dashboard-${Date.now()}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-                toast.success("Snapshot downloaded");
-              }}
-              disabled={loading || !snap}
-            >
-              <Download className="size-4" />
-            </Button>
-          </div>
-        </div>
 
-        <div className="mt-6 flex flex-col items-center gap-2 border-t border-border/50 pt-6 md:mt-8 md:pt-8">
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span>Power</span>
-            <Hint label="Big button: green = game looks running, yellow = something’s half-on, red = off. Click it to start, stop, or restart—same as the buttons under “Quick actions.”" />
+            <PowerOrb
+              phase={phase}
+              disabled={powerOrbDisabled}
+              title={powerOrbTitle}
+              actionLabel={powerActionLabel}
+              size="hero"
+              onClick={handlePowerOrbClick}
+            />
+
+            {!s?.configured ? (
+              <Link
+                href="/settings"
+                className={cn(
+                  buttonVariants({ variant: "secondary", size: "default" }),
+                  "rounded-full px-6",
+                )}
+              >
+                Configure in Settings
+              </Link>
+            ) : null}
           </div>
-          <PowerOrb
-            phase={phase}
-            disabled={powerOrbDisabled}
-            title={powerOrbTitle}
-            onClick={handlePowerOrbClick}
-          />
-          <p className="max-w-md text-center text-[11px] text-muted-foreground">
-            {s?.configured ? `${s.user}@${s.host}` : "Configure SSH in Settings"}
-          </p>
         </div>
       </section>
 
@@ -479,83 +549,59 @@ export function DashboardClient() {
         healthScore={snap?.healthScore}
         loading={loading}
         refreshTick={refreshTick}
+        variant="dashboard"
       />
 
+      <ActivityLatestStrip refreshTick={refreshTick} />
+
       {modStackValidation && modStackValidation.issues.length > 0 ? (
-        <div className="space-y-1.5">
-          <ModStackValidationPanel compact title="Mod stack (saved)" result={modStackValidation} />
+        <div className="space-y-2">
+          <ModStackValidationPanel compact title="Mod stack" result={modStackValidation} />
           <p className="text-center text-[11px] text-muted-foreground">
             <Link href="/mods" className="font-medium text-primary underline underline-offset-2">
-              Open Mods to fix load order or duplicates
+              Fix on Mods
             </Link>
           </p>
         </div>
       ) : null}
 
-      {/* Primary metrics */}
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard
-          icon={Activity}
-          label="Power"
-          hint="Up = we see your game running the way we expect. Down = we don’t. (We peek at your cloud PC to check.)"
-        >
-          {loading && !snap ? (
-            "…"
-          ) : st?.serverLikelyUp ? (
-            <span className="text-emerald-500">Up</span>
-          ) : (
-            <span className="text-muted-foreground">Down</span>
-          )}
-        </StatCard>
-        <StatCard icon={Users} label="Players" hint="Live player count isn’t wired up here yet—coming later.">
-          —
-        </StatCard>
-        <StatCard
-          icon={Server}
-          label="Mods"
-          hint="How many workshop mods are in your server settings (after we clean the file up)."
-        >
-          {modCount == null ? "—" : modCount}
-        </StatCard>
-        <StatCard
-          icon={Cpu}
-          label="Scenario"
-          hint="Which mission/map the server loads—that long ID string."
-        >
-          <span className="line-clamp-2 break-all font-mono text-xs text-muted-foreground">
-            {scenarioId ?? "—"}
-          </span>
-        </StatCard>
-        <StatCard
-          icon={Timer}
-          label="Uptime"
-          hint="How long the machine has been on—not necessarily how long the game has been running."
-        >
-          <span className="line-clamp-2 font-mono text-xs text-muted-foreground">
+      {/* Metrics */}
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <MetricTile icon={Timer} label="Uptime">
+          <span className="line-clamp-2 font-mono text-base text-foreground">
             {snap?.system?.uptime?.replace(/^up\s*/i, "") ?? "—"}
           </span>
-        </StatCard>
+        </MetricTile>
+        <MetricTile icon={Users} label="Players">
+          <span className="text-muted-foreground">—</span>
+        </MetricTile>
+        <MetricTile icon={Server} label="Mods">
+          {modCount == null ? "—" : modCount}
+        </MetricTile>
+        <MetricTile icon={Cpu} label="Load">
+          {load ? (
+            <span>
+              {load.label}
+              <span className="ml-1 text-xs font-normal text-muted-foreground">({load.pct}%)</span>
+            </span>
+          ) : (
+            "—"
+          )}
+        </MetricTile>
+        <MetricTile icon={Activity} label="Memory">
+          {mem ? <span>{mem.usedPct}%</span> : "—"}
+        </MetricTile>
+        <MetricTile icon={HardDrive} label="Disk">
+          {disk ? <span>{disk.usedPct}%</span> : "—"}
+        </MetricTile>
       </section>
 
       {snap?.logAnalysis && snap.logAnalysis.issues.length > 0 ? (
-        <div className="space-y-2">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Log signals (recent tail)
-          </p>
-          <LogAnalysisCard
-            analysis={snap.logAnalysis}
-            compact
-            title="Detected issues"
-            description="From the latest log tail fetched with Home refresh — open Logs for the full file."
-          />
-        </div>
-      ) : snap?.logAnalysis && snap.logAnalysis.summary.highestSeverity === "none" ? (
-        <p className="text-xs text-muted-foreground">
-          Recent log tail: no known failure patterns matched.
-        </p>
+        <LogAnalysisCard analysis={snap.logAnalysis} variant="dashboard" />
       ) : null}
 
       <ConnectivitySection
+        variant="dashboard"
         snap={snap}
         loading={loading}
         history={latencyHistory}
@@ -595,127 +641,88 @@ export function DashboardClient() {
       />
 
       {/* Quick actions */}
-      <section className="space-y-2">
-        <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          <span>Quick actions</span>
-          <Hint label="Start boots the game on your cloud machine. Stop shuts it down cleanly. Restart = stop then start. Safe start only tries if we don’t already think it’s running." />
-        </div>
-        <div className="flex flex-wrap gap-2">
-        <Button
-          className="min-h-11 min-w-[7rem] touch-manipulation sm:min-h-8"
-          onClick={() => run("start", () => actionStartServer() as Promise<{ ok: boolean; error?: string }>)}
-          disabled={!!actionKey}
-        >
-          {actionKey === "start" ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Play className="mr-2 size-4" />}
-          Start
-        </Button>
-        <Button
-          variant="secondary"
-          className="min-h-11 min-w-[7rem] touch-manipulation sm:min-h-8"
-          onClick={() => run("stop", () => actionStopServer() as Promise<{ ok: boolean; error?: string }>)}
-          disabled={!!actionKey}
-        >
-          {actionKey === "stop" ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Power className="mr-2 size-4" />}
-          Stop
-        </Button>
-        <Button
-          variant="secondary"
-          className="min-h-11 min-w-[7rem] touch-manipulation sm:min-h-8"
-          onClick={() => run("restart", () => actionRestartServer() as Promise<{ ok: boolean; error?: string }>)}
-          disabled={!!actionKey}
-        >
-          {actionKey === "restart" ? (
-            <Loader2 className="mr-2 size-4 animate-spin" />
-          ) : (
-            <RefreshCw className="mr-2 size-4" />
-          )}
-          Restart
-        </Button>
-        <Button
-          variant="outline"
-          className="min-h-11 touch-manipulation sm:min-h-8"
-          onClick={() => {
-            if (st?.serverLikelyUp) {
-              toast.message("Already running", { description: "Stop first if you need a clean start." });
-              return;
-            }
-            run("safe-start", () => actionStartServer() as Promise<{ ok: boolean; error?: string }>);
-          }}
-          disabled={!!actionKey}
-        >
-          Safe start
-        </Button>
-        <Button
-          variant="outline"
-          className="min-h-11 touch-manipulation sm:min-h-8"
-          onClick={() => void refresh()}
-          disabled={loading}
-        >
-          {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
-          Refresh
-        </Button>
-        <Link
-          href="/logs"
-          className={cn(
-            buttonVariants({ variant: "outline", size: "default" }),
-            "inline-flex min-h-11 items-center justify-center gap-1 touch-manipulation sm:min-h-8",
-          )}
-        >
-          Logs
-          <ArrowUpRight className="size-3.5 opacity-70" aria-hidden />
-        </Link>
-        <Button
-          variant="secondary"
-          className="min-h-11 touch-manipulation sm:min-h-8"
-          onClick={() => void runFixServerAction()}
-          disabled={!!actionKey || !s?.configured}
-        >
-          {actionKey === "fix" ? (
-            <Loader2 className="mr-2 size-4 animate-spin" />
-          ) : (
-            <Wrench className="mr-2 size-4" aria-hidden />
-          )}
-          <span aria-hidden>🔧</span> Fix Server
-        </Button>
-        </div>
-        <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-          <Hint label="Recovery pass: checks your config first, then clears stuck game processes and the background session, saves a cleaned config (with backup), and starts the server the same way as Start. Not the same as Restart—built for messy or half-crashed states. Safe to run more than once." />
-          <span>Repair + stabilize when things feel stuck (not a plain restart).</span>
+      <section className="space-y-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          Quick actions
         </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            className="h-11 min-h-11 touch-manipulation rounded-xl border border-border/60 px-4"
+            onClick={() => void runFixServerAction()}
+            disabled={!!actionKey || !s?.configured}
+          >
+            {actionKey === "fix" ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Wrench className="mr-2 size-4" aria-hidden />
+            )}
+            <span aria-hidden>🔧</span> Fix server
+          </Button>
+          <Button
+            className="h-11 min-h-11 touch-manipulation rounded-xl px-4"
+            onClick={() => setSafeRestartOpen(true)}
+            disabled={!!actionKey || !s?.configured}
+          >
+            <RotateCw className="mr-2 size-4" aria-hidden />
+            <span aria-hidden>🔄</span> Safe restart
+          </Button>
+          <Link
+            href="/diagnostics"
+            className={cn(
+              buttonVariants({ variant: "outline", size: "default" }),
+              "inline-flex h-11 min-h-11 items-center justify-center gap-2 rounded-xl px-4 touch-manipulation",
+            )}
+          >
+            <FlaskConical className="size-4" aria-hidden />
+            <span aria-hidden>🧪</span> Diagnostics
+          </Link>
+          <Link
+            href="/logs"
+            className={cn(
+              buttonVariants({ variant: "outline", size: "default" }),
+              "inline-flex h-11 min-h-11 items-center justify-center gap-2 rounded-xl px-4 touch-manipulation",
+            )}
+          >
+            <ScrollText className="size-4" aria-hidden />
+            <span aria-hidden>📄</span> View logs
+          </Link>
+        </div>
 
         {modStackValidation && modStackValidation.summary.errors > 0 ? (
-          <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
-            Saved mod stack has validation errors ({modStackValidation.summary.errors}) — clean it up on the Mods
-            page before expecting a reliable boot after repair or safe restart.
+          <p className="text-[11px] text-amber-700 dark:text-amber-300">
+            Mod stack errors ({modStackValidation.summary.errors}) —{" "}
+            <Link href="/mods" className="font-medium underline underline-offset-2">
+              Mods
+            </Link>
           </p>
         ) : null}
 
-        <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.06] to-transparent p-4 shadow-sm ring-1 ring-primary/10">
-          <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold tracking-tight text-foreground">Safe restart</p>
-              <p className="mt-0.5 max-w-xl text-[11px] leading-relaxed text-muted-foreground">
-                Validates config, writes a normalized file if needed, stops cleanly, then starts fresh and verifies
-                process, tmux, and UDP ports — idempotent.
-              </p>
-              {lastSafeRestartAt ? (
-                <p className="mt-2 text-[10px] text-muted-foreground">
-                  Last successful restart:{" "}
-                  <span className="font-mono text-foreground/90">
-                    {new Date(lastSafeRestartAt).toLocaleString()}
-                  </span>
-                </p>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <Label htmlFor="safe-restart-reason" className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                Reason (tracking)
+        {lastSafeRestartAt ? (
+          <p className="text-[10px] text-muted-foreground">
+            Last safe restart:{" "}
+            <span className="font-mono text-foreground/90">
+              {new Date(lastSafeRestartAt).toLocaleString()}
+            </span>
+          </p>
+        ) : null}
+
+        <Dialog open={safeRestartOpen} onOpenChange={setSafeRestartOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Safe restart</DialogTitle>
+              <DialogDescription className="text-xs">
+                Stops cleanly, normalizes config if needed, then starts and verifies ports. Full steps stay in the
+                panel below after it runs.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label htmlFor="safe-restart-reason-dlg" className="text-[10px] uppercase tracking-wide">
+                Reason
               </Label>
               <select
-                id="safe-restart-reason"
-                className="h-11 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm sm:max-w-xs"
+                id="safe-restart-reason-dlg"
+                className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
                 value={safeRestartReason}
                 disabled={!!actionKey}
                 onChange={(e) => setSafeRestartReason(e.target.value as SafeRestartReason)}
@@ -726,25 +733,93 @@ export function DashboardClient() {
                 <option value="after_repair">After repair</option>
               </select>
             </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSafeRestartOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  setSafeRestartOpen(false);
+                  void runSafeRestartAction();
+                }}
+                disabled={!!actionKey || !s?.configured}
+              >
+                {actionKey === "safe-restart" ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <RotateCw className="mr-2 size-4" aria-hidden />
+                )}
+                Run safe restart
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </section>
+
+      <details className="group rounded-2xl border border-border/60 bg-muted/5 open:bg-muted/10">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium outline-none [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center justify-between gap-2">
+            <span>More controls</span>
+            <span className="text-[11px] font-normal text-muted-foreground group-open:hidden">
+              Start · Stop · Restart…
+            </span>
+          </span>
+        </summary>
+        <div className="space-y-3 border-t border-border/50 px-4 pb-4 pt-3">
+          <div className="flex flex-wrap gap-2">
             <Button
-              className="h-11 min-h-11 shrink-0 touch-manipulation bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => void runSafeRestartAction()}
-              disabled={!!actionKey || !s?.configured}
+              onClick={() => run("start", () => actionStartServer() as Promise<{ ok: boolean; error?: string }>)}
+              disabled={!!actionKey}
             >
-              {actionKey === "safe-restart" ? (
+              {actionKey === "start" ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Play className="mr-2 size-4" />}
+              Start
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => run("stop", () => actionStopServer() as Promise<{ ok: boolean; error?: string }>)}
+              disabled={!!actionKey}
+            >
+              {actionKey === "stop" ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Power className="mr-2 size-4" />}
+              Stop
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => run("restart", () => actionRestartServer() as Promise<{ ok: boolean; error?: string }>)}
+              disabled={!!actionKey}
+            >
+              {actionKey === "restart" ? (
                 <Loader2 className="mr-2 size-4 animate-spin" />
               ) : (
-                <RotateCw className="mr-2 size-4" aria-hidden />
+                <RefreshCw className="mr-2 size-4" />
               )}
-              Safe Restart
+              Restart
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (st?.serverLikelyUp) {
+                  toast.message("Already running", { description: "Stop first if you need a clean start." });
+                  return;
+                }
+                run("safe-start", () => actionStartServer() as Promise<{ ok: boolean; error?: string }>);
+              }}
+              disabled={!!actionKey}
+            >
+              Safe start
             </Button>
           </div>
-          <p className="mt-2 flex items-start gap-1.5 text-[10px] text-muted-foreground">
-            <Hint label="Not the same as the plain Restart button — this pipeline refuses bad JSON, persists normalization, stops processes until gone, then starts and checks UDP game + A2S ports plus log patterns." />
-            <span>Controlled orchestration — safe to run repeatedly.</span>
+          <p className="text-[11px] text-muted-foreground">
+            Same actions as the power control — use when you want explicit buttons.{" "}
+            <Link href="/settings" className="text-primary underline underline-offset-2">
+              SSH & paths → Settings
+            </Link>
+            {" · "}
+            <Link href="/diagnostics" className="text-primary underline underline-offset-2">
+              Raw stats → Diagnostics
+            </Link>
           </p>
         </div>
-      </section>
+      </details>
 
       {lastSafeRestart ? (
         <SafeRestartPanel result={lastSafeRestart} checkPort={s?.checkPort ?? 2001} />
@@ -826,80 +901,62 @@ export function DashboardClient() {
         </details>
       ) : null}
 
-      {/* Diagnostics strip */}
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <Card className="border-border/70">
-          <CardContent className="space-y-1 p-3">
-            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Port
-              <Hint label="The port number this panel watches for (usually your game port). We read it from your settings—not a live ping test." />
-            </p>
-            <p className="font-mono text-xs text-foreground">{s?.checkPort ?? "—"}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-border/70">
-          <CardContent className="space-y-1 p-3">
-            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              tmux
-              <Hint label="A named “screen session” so the game keeps running after you disconnect from the server. Rarely need to change the name." />
-            </p>
-            <p className="font-mono text-xs text-foreground">{s?.tmuxSession ?? "—"}</p>
-            <Badge variant={st?.tmuxSessionExists ? "default" : "secondary"} className="text-[10px]">
-              {st?.tmuxSessionExists ? "yes" : "no"}
-            </Badge>
-          </CardContent>
-        </Card>
-        <Card className="border-border/70">
-          <CardContent className="space-y-1 p-3">
-            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Public IP
-              <Hint label="The public IP/hostname from your server settings. We compare it to where this panel connects—if they don’t match, friends might use the wrong address." />
-            </p>
-            <p className="truncate font-mono text-xs text-foreground" title={publicAddr ?? ""}>
-              {publicAddr ?? "—"}
-            </p>
-            {publicMatch != null ? (
-              <Badge variant={publicMatch ? "outline" : "secondary"} className="text-[10px]">
-                {publicMatch ? "matches panel host" : "differs"}
-              </Badge>
-            ) : null}
-          </CardContent>
-        </Card>
-        <Card className="border-border/70">
-          <CardContent className="space-y-1 p-3">
-            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Process
-              <Hint label="Did we spot the actual game executable running? If tmux says yes but this says no, the game might still be booting up." />
-            </p>
-            <Badge variant={st?.processRunning ? "default" : "secondary"} className="text-[10px]">
-              {st?.processRunning ? "Arma seen" : "not seen"}
-            </Badge>
-          </CardContent>
-        </Card>
-        <Card className="border-border/70">
-          <CardContent className="space-y-1 p-3">
-            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Mods
-              <Hint label="Same mod count as the big “Mods” tile above—workshop mods in your config." />
-            </p>
-            <p className="font-mono text-xs">{modCount ?? "—"}</p>
-          </CardContent>
-        </Card>
-      </section>
-
       {/* Advanced */}
       <details className="group rounded-2xl border border-border/70 bg-muted/10 open:bg-muted/20">
         <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring md:px-5 md:py-4 [&::-webkit-details-marker]:hidden">
           <span className="flex items-center justify-between gap-2">
-            <span className="flex items-center gap-1.5">
-              Advanced
-              <Hint label="Geeky details: ports, RAM, file paths. Handy for Discord help or support. Nothing leaves your browser unless you copy it." />
-            </span>
-            <span className="text-[11px] font-normal text-muted-foreground group-open:hidden">Show raw data</span>
+            <span>Advanced · SSH, paths, raw snapshots</span>
+            <span className="text-[11px] font-normal text-muted-foreground group-open:hidden">Open</span>
             <span className="hidden text-[11px] font-normal text-muted-foreground group-open:inline">Hide</span>
           </span>
         </summary>
         <div className="space-y-4 border-t border-border/60 px-4 pb-4 pt-2 md:px-5 md:pb-5">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <Card className="rounded-xl border-border/70">
+              <CardContent className="space-y-1 p-3">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Game port</p>
+                <p className="font-mono text-xs text-foreground">{s?.checkPort ?? "—"}</p>
+              </CardContent>
+            </Card>
+            <Card className="rounded-xl border-border/70">
+              <CardContent className="space-y-1 p-3">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">tmux</p>
+                <p className="font-mono text-xs text-foreground">{s?.tmuxSession ?? "—"}</p>
+                <Badge variant={st?.tmuxSessionExists ? "default" : "secondary"} className="text-[10px]">
+                  {st?.tmuxSessionExists ? "yes" : "no"}
+                </Badge>
+              </CardContent>
+            </Card>
+            <Card className="rounded-xl border-border/70">
+              <CardContent className="space-y-1 p-3">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Public address</p>
+                <p className="truncate font-mono text-xs text-foreground" title={publicAddr ?? ""}>
+                  {publicAddr ?? "—"}
+                </p>
+                {publicMatch != null ? (
+                  <Badge variant={publicMatch ? "outline" : "secondary"} className="text-[10px]">
+                    {publicMatch ? "matches panel" : "differs"}
+                  </Badge>
+                ) : null}
+              </CardContent>
+            </Card>
+            <Card className="rounded-xl border-border/70">
+              <CardContent className="space-y-1 p-3">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Process</p>
+                <Badge variant={st?.processRunning ? "default" : "secondary"} className="text-[10px]">
+                  {st?.processRunning ? "Arma seen" : "not seen"}
+                </Badge>
+              </CardContent>
+            </Card>
+            <Card className="rounded-xl border-border/70">
+              <CardContent className="space-y-1 p-3">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Scenario</p>
+                <p className="line-clamp-3 break-all font-mono text-[10px] text-muted-foreground">
+                  {scenarioId ?? "—"}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <p className="mb-1 text-[10px] uppercase text-muted-foreground">Host</p>
@@ -970,10 +1027,7 @@ export function DashboardClient() {
             </pre>
           </div>
             <div>
-              <p className="mb-1 flex items-center gap-1 text-[10px] uppercase text-muted-foreground">
-                Sticky notes (this browser)
-                <Hint label="Your notes stay in this browser only—not on the server. Great for reminders to yourself." />
-              </p>
+              <p className="mb-1 text-[10px] uppercase text-muted-foreground">Sticky notes (this browser)</p>
             <Textarea
               placeholder="Internal notes…"
               value={stickyNotes}
@@ -981,66 +1035,63 @@ export function DashboardClient() {
               className="min-h-[80px] resize-y rounded-xl text-sm"
             />
           </div>
+          <div className="border-t border-border/50 pt-4">
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Peek tools</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() =>
+                  run("health", async () => {
+                    const r = await actionCheckHealth();
+                    if (r.ok) {
+                      toast.message("Health snapshot", {
+                        description: r.data.free.slice(0, 160) + (r.data.free.length > 160 ? "…" : ""),
+                      });
+                    }
+                    return r;
+                  })
+                }
+                disabled={!!actionKey}
+              >
+                {actionKey === "health" ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Cpu className="mr-2 size-4" />}
+                Memory snapshot
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => run("ports", () => actionCheckPorts() as Promise<{ ok: boolean; error?: string }>)}
+                disabled={!!actionKey}
+              >
+                {actionKey === "ports" ? <Loader2 className="mr-2 size-4 animate-spin" /> : <EthernetPort className="mr-2 size-4" />}
+                Refresh ports
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() =>
+                  run("logs", async () => {
+                    const r = await actionFetchLogs();
+                    if (r.ok) {
+                      toast.message("Log preview", {
+                        description: r.data.text.slice(0, 200) + (r.data.text.length > 200 ? "…" : ""),
+                      });
+                    }
+                    return r;
+                  })
+                }
+                disabled={!!actionKey}
+              >
+                {actionKey === "logs" ? <Loader2 className="mr-2 size-4 animate-spin" /> : <ScrollText className="mr-2 size-4" />}
+                Log preview
+              </Button>
+            </div>
+          </div>
         </div>
       </details>
-
-      {/* Secondary actions (collapsed tools) */}
-      <div className="space-y-2 border-t border-border/40 pt-4">
-        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span>Tools</span>
-          <Hint label="Quick peeks: RAM snapshot, refresh port list, or a tiny log preview in a popup—without leaving the page." />
-        </div>
-        <div className="flex flex-wrap gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground"
-          onClick={() =>
-            run("health", async () => {
-              const r = await actionCheckHealth();
-              if (r.ok) {
-                toast.message("Health snapshot", { description: r.data.free.slice(0, 160) + (r.data.free.length > 160 ? "…" : "") });
-              }
-              return r;
-            })
-          }
-          disabled={!!actionKey}
-        >
-          {actionKey === "health" ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Cpu className="mr-2 size-4" />}
-          CPU check
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground"
-          onClick={() => run("ports", () => actionCheckPorts() as Promise<{ ok: boolean; error?: string }>)}
-          disabled={!!actionKey}
-        >
-          {actionKey === "ports" ? <Loader2 className="mr-2 size-4 animate-spin" /> : <EthernetPort className="mr-2 size-4" />}
-          Refresh ports
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground"
-          onClick={() =>
-            run("logs", async () => {
-              const r = await actionFetchLogs();
-              if (r.ok) {
-                toast.message("Log preview", {
-                  description: r.data.text.slice(0, 200) + (r.data.text.length > 200 ? "…" : ""),
-                });
-              }
-              return r;
-            })
-          }
-          disabled={!!actionKey}
-        >
-          {actionKey === "logs" ? <Loader2 className="mr-2 size-4 animate-spin" /> : <ScrollText className="mr-2 size-4" />}
-          Peek logs
-        </Button>
-        </div>
-      </div>
     </div>
   );
 }

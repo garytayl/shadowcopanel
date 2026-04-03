@@ -20,6 +20,9 @@
 # production
 /build
 
+# local activity log (Next.js host)
+/data/
+
 # misc
 .DS_Store
 *.pem

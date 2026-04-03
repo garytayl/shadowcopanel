@@ -1,10 +1,13 @@
 "use server";
 
 import { ensureConfigured } from "@/lib/actions/guard";
+import { safeRecordActivity } from "@/lib/activity/log";
+import { diffReforgerConfig } from "@/lib/reforger/config-diff";
 import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
 import { validateReforgerConfigForWrite } from "@/lib/reforger/config-validate";
 import type { ConfigNormalizationIssue } from "@/lib/reforger/types";
 import {
+  applyFormToConfig,
   configToFormValues,
   parseConfigJson,
   stringifyConfig,
@@ -51,7 +54,22 @@ export async function saveRemoteConfigAction(
     const p = parseConfigJson(raw);
     if (!p.ok) return err(`Invalid JSON on server before save: ${p.error}`);
     const baseNorm = normalizeReforgerConfig(p.value);
+    const before = baseNorm.config;
+    const after = normalizeReforgerConfig(
+      applyFormToConfig(JSON.parse(JSON.stringify(before)) as ReforgerConfig, form),
+    ).config;
+    const diff = diffReforgerConfig(before, after);
     const r = await saveRemoteConfigFromForm(baseNorm.config, form);
+    safeRecordActivity({
+      type: "config_saved",
+      severity: "success",
+      title: "Config saved (form)",
+      message:
+        diff.summary.total > 0
+          ? `${diff.summary.total} change(s) · ${r.bytes} bytes`
+          : `No semantic diff · ${r.bytes} bytes`,
+      metadata: { diffSummary: diff.summary, bytes: r.bytes, backupPath: r.backupPath },
+    });
     return ok(r);
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));
@@ -64,6 +82,11 @@ export async function saveRawConfigAction(
   const g = ensureConfigured();
   if (g !== true) return g;
   try {
+    const rawExisting = await getRemoteConfigText();
+    const pBefore = parseConfigJson(rawExisting);
+    if (!pBefore.ok) return err(`Invalid JSON on server before save: ${pBefore.error}`);
+    const before = normalizeReforgerConfig(pBefore.value).config;
+
     const p = parseConfigJson(rawJson);
     if (!p.ok) return err(p.error);
     const norm = normalizeReforgerConfig(p.value);
@@ -71,7 +94,19 @@ export async function saveRawConfigAction(
     if (!v.ok) {
       return err(v.issues.map((i) => `${i.path}: ${i.message}`).join("; "));
     }
-    const r = await saveRemoteConfig(norm.config);
+    const after = norm.config;
+    const diff = diffReforgerConfig(before, after);
+    const r = await saveRemoteConfig(after);
+    safeRecordActivity({
+      type: "config_saved",
+      severity: "success",
+      title: "Config saved (raw JSON)",
+      message:
+        diff.summary.total > 0
+          ? `${diff.summary.total} change(s) · ${r.bytes} bytes`
+          : `No semantic diff · ${r.bytes} bytes`,
+      metadata: { diffSummary: diff.summary, bytes: r.bytes, backupPath: r.backupPath },
+    });
     return ok(r);
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));
@@ -130,6 +165,13 @@ export async function repairRemoteConfigAction(): Promise<
       norm.issues.length > 0
         ? norm.issues.map((i) => `[${i.severity}] ${i.message}`)
         : ["Config already matched canonical shape (no structural fixes)."];
+    safeRecordActivity({
+      type: "config_repaired",
+      severity: "success",
+      title: "Config repaired / normalized",
+      message: summaryLines[0],
+      metadata: { summaryLines, bytes: r.bytes },
+    });
     return ok({ ...r, summaryLines });
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));

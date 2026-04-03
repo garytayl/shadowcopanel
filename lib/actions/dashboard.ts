@@ -1,6 +1,11 @@
 "use server";
 
 import { ensureConfigured } from "@/lib/actions/guard";
+import {
+  maybeRecordCriticalLogIssue,
+  maybeRecordHealthWarning,
+  safeRecordActivity,
+} from "@/lib/activity/log";
 import { getPublicServerSettings } from "@/lib/env/server";
 import { getGamePortChecks } from "@/lib/ssh/port-check";
 import {
@@ -91,6 +96,26 @@ export async function fetchDashboardSnapshot(): Promise<
       cpuCores,
     });
 
+    if (logAnalysis) {
+      const criticalIssues = logAnalysis.issues.filter((i) => i.severity === "critical");
+      if (criticalIssues.length > 0) {
+        void maybeRecordCriticalLogIssue({
+          fingerprint: criticalIssues
+            .map((i) => i.key)
+            .sort()
+            .join("|"),
+          titles: criticalIssues.map((i) => i.title),
+        });
+      }
+    }
+    if (healthScore.score <= 39) {
+      void maybeRecordHealthWarning({
+        score: healthScore.score,
+        status: healthScore.status,
+        summary: healthScore.summary,
+      });
+    }
+
     return ok({
       settings,
       status,
@@ -115,7 +140,14 @@ export async function actionStartServer(): Promise<
   const g = ensureConfigured();
   if (g !== true) return g;
   try {
-    return ok(await startServer());
+    const out = await startServer();
+    safeRecordActivity({
+      type: "server_started",
+      severity: "success",
+      title: "Start server",
+      message: out.message,
+    });
+    return ok(out);
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));
   }
@@ -127,7 +159,14 @@ export async function actionStopServer(): Promise<
   const g = ensureConfigured();
   if (g !== true) return g;
   try {
-    return ok(await stopServer());
+    const out = await stopServer();
+    safeRecordActivity({
+      type: "server_stopped",
+      severity: "success",
+      title: "Stop server",
+      message: out.message,
+    });
+    return ok(out);
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));
   }
@@ -139,7 +178,14 @@ export async function actionRestartServer(): Promise<
   const g = ensureConfigured();
   if (g !== true) return g;
   try {
-    return ok(await restartServer());
+    const out = await restartServer();
+    safeRecordActivity({
+      type: "server_restarted",
+      severity: "success",
+      title: "Restart server",
+      message: out.message,
+    });
+    return ok(out);
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));
   }

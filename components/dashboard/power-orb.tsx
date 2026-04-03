@@ -26,12 +26,19 @@ const LABEL: Record<PowerOrbPhase, string> = {
   unknown: "Unknown",
 };
 
+const SIZE = {
+  default: "size-28 md:size-32",
+  hero: "size-36 md:size-40",
+} as const;
+
 export function PowerOrb({
   phase,
   className,
   onClick,
   disabled = false,
   title: titleProp,
+  actionLabel,
+  size = "default",
 }: {
   phase: PowerOrbPhase;
   className?: string;
@@ -40,6 +47,10 @@ export function PowerOrb({
   disabled?: boolean;
   /** Tooltip (e.g. “Stop server”). */
   title?: string;
+  /** Shown under the orb (e.g. “Start server”) — switch-style affordance. */
+  actionLabel?: string;
+  /** `hero`: larger control for dashboard hero. */
+  size?: keyof typeof SIZE;
 }) {
   const busy = phase === "loading" || phase === "starting" || phase === "stopping" || phase === "restarting";
   const interactive = Boolean(onClick) && !disabled && !busy;
@@ -59,7 +70,8 @@ export function PowerOrb({
         title={titleProp}
         aria-label={titleProp ?? LABEL[phase]}
         className={cn(
-          "relative flex size-28 items-center justify-center rounded-full border-2 border-border/80 bg-gradient-to-b from-card to-muted/30 outline-none transition-[box-shadow,transform] md:size-32",
+          "relative flex items-center justify-center rounded-full border-2 border-border/80 bg-gradient-to-b from-card to-muted/30 outline-none transition-[box-shadow,transform]",
+          SIZE[size],
           glow,
           interactive &&
             "cursor-pointer hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus-visible:ring-2 focus-visible:ring-ring",
@@ -86,11 +98,17 @@ export function PowerOrb({
         />
         <div className="relative z-10 flex flex-col items-center gap-1">
           {busy ? (
-            <Loader2 className="size-10 animate-spin text-primary md:size-11" aria-hidden />
+            <Loader2
+              className={cn(
+                "animate-spin text-primary",
+                size === "hero" ? "size-12 md:size-14" : "size-10 md:size-11",
+              )}
+              aria-hidden
+            />
           ) : (
             <Power
               className={cn(
-                "size-10 md:size-11",
+                size === "hero" ? "size-12 md:size-14" : "size-10 md:size-11",
                 phase === "running" && "text-emerald-400",
                 phase === "degraded" && "text-amber-400",
                 (phase === "stopped" || phase === "unknown") && "text-muted-foreground",
@@ -102,7 +120,12 @@ export function PowerOrb({
         </div>
       </motion.button>
       <div className="text-center">
-        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{LABEL[phase]}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          {actionLabel ?? LABEL[phase]}
+        </p>
+        {actionLabel ? (
+          <p className="mt-0.5 text-[10px] text-muted-foreground/80">{LABEL[phase]}</p>
+        ) : null}
       </div>
     </div>
   );

@@ -20,12 +20,18 @@ import {
 } from "@/lib/actions/mods";
 import { actionValidateModStackFull } from "@/lib/actions/mod-stack-validation";
 import {
+  isConfigDiffEmpty,
+  previewModsSaveDiff,
+  type ConfigDiffResult,
+} from "@/lib/reforger/config-diff";
+import {
   autoCleanModStack,
   validateModStack,
   type ModStackValidationResult,
 } from "@/lib/reforger/mod-stack-analysis";
 import { Hint } from "@/components/dashboard/hint";
 import { ConfigAnomalyBanner } from "@/components/panel/config-anomaly-banner";
+import { ConfigDiffDialog } from "@/components/panel/config-diff-dialog";
 import {
   ModStackValidationPanel,
   formatModStackSummaryLine,
@@ -66,6 +72,11 @@ export function ModsManager() {
   const [enrichedValidation, setEnrichedValidation] = useState<ModStackValidationResult | null>(null);
   const [enriching, setEnriching] = useState(false);
   const [allowSaveDespiteStackErrors, setAllowSaveDespiteStackErrors] = useState(false);
+  const [remoteRawConfig, setRemoteRawConfig] = useState("");
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [pendingDiff, setPendingDiff] = useState<ConfigDiffResult | null>(null);
+  const [diffRawBefore, setDiffRawBefore] = useState<string | undefined>();
+  const [diffRawAfter, setDiffRawAfter] = useState<string | undefined>();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -84,6 +95,7 @@ export function ModsManager() {
     setAnomalies(r.data.anomalies);
     setMaxPlayers(r.data.maxPlayers);
     setEnrichedValidation(null);
+    setRemoteRawConfig(r.data.rawConfig);
   }, []);
 
   const liveValidation = useMemo(() => {
@@ -128,7 +140,35 @@ export function ModsManager() {
     });
   };
 
-  const save = async () => {
+  const prepareSave = () => {
+    if (liveValidation.summary.errors > 0 && !allowSaveDespiteStackErrors) {
+      toast.error("Fix stack validation errors or enable the override checkbox.");
+      return;
+    }
+    const preview = previewModsSaveDiff(
+      remoteRawConfig,
+      rows.map(({ modId, name, version, enabled }) => ({ modId, name, version, enabled })),
+    );
+    if (!preview.ok) {
+      if ("parseError" in preview) {
+        toast.error(preview.parseError);
+        return;
+      }
+      toast.error(preview.mutationErrors.map((i) => i.message).join(" "));
+      return;
+    }
+    if (isConfigDiffEmpty(preview.diff)) {
+      toast.message("No changes to save");
+      return;
+    }
+    setPendingDiff(preview.diff);
+    setDiffRawBefore(preview.rawBefore);
+    setDiffRawAfter(preview.rawAfter);
+    setDiffOpen(true);
+  };
+
+  const executeSave = async () => {
+    setDiffOpen(false);
     setSaving(true);
     const r = await saveModsAction(
       rows.map(({ modId, name, version, enabled }) => ({
@@ -155,6 +195,7 @@ export function ModsManager() {
       toast.message("Normalization", { description: warn.slice(0, 3).map((i) => i.message).join(" · ") });
     }
     setAllowSaveDespiteStackErrors(false);
+    setPendingDiff(null);
     await load();
   };
 
@@ -177,6 +218,17 @@ export function ModsManager() {
 
   return (
     <div className="space-y-6">
+      <ConfigDiffDialog
+        open={diffOpen}
+        onOpenChange={setDiffOpen}
+        diff={pendingDiff}
+        title="Review mod list changes"
+        description="Normalized diff vs the last loaded remote config. Confirm to write game.mods."
+        rawBefore={diffRawBefore}
+        rawAfter={diffRawAfter}
+        confirmLabel="Save to server"
+        onConfirm={() => void executeSave()}
+      />
       <ConfigAnomalyBanner issues={anomalies} />
 
       <ModStackValidationPanel
@@ -267,7 +319,7 @@ export function ModsManager() {
           <FileDown className="mr-2 size-4" />
           Export JSON
         </Button>
-        <Button onClick={() => void save()} disabled={saving || loading}>
+        <Button onClick={prepareSave} disabled={saving || loading}>
           {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
           Save to config
         </Button>

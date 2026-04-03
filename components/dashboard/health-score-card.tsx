@@ -112,11 +112,14 @@ export function HealthScoreCard({
   healthScore,
   loading,
   refreshTick,
+  variant = "default",
 }: {
   healthScore: HealthScoreResult | null | undefined;
   loading: boolean;
   /** Increments on each successful dashboard snapshot refresh (for trend samples). */
   refreshTick: number;
+  /** `dashboard`: minimal copy, scan-friendly layout. */
+  variant?: "default" | "dashboard";
 }) {
   const [trend, setTrend] = useState<HealthScoreTrendPoint[]>([]);
 
@@ -151,7 +154,12 @@ export function HealthScoreCard({
   if (loading && !healthScore) {
     return (
       <Card className="overflow-hidden rounded-2xl border-border/80 bg-gradient-to-br from-card via-card to-muted/20">
-        <CardContent className="flex min-h-[10rem] items-center justify-center p-6 text-sm text-muted-foreground">
+        <CardContent
+          className={cn(
+            "flex items-center justify-center text-sm text-muted-foreground",
+            variant === "dashboard" ? "min-h-[8rem] p-5" : "min-h-[10rem] p-6",
+          )}
+        >
           Calculating health…
         </CardContent>
       </Card>
@@ -163,6 +171,126 @@ export function HealthScoreCard({
   }
 
   const { score, status, summary, factors, penalties } = healthScore;
+
+  const criticalPulse =
+    variant === "dashboard" &&
+    (status === "Critical" || status === "Down");
+
+  if (variant === "dashboard") {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+      >
+        <Card
+          className={cn(
+            "overflow-hidden rounded-2xl border-border/80 bg-gradient-to-br from-card via-card to-muted/25 shadow-lg ring-1 ring-inset ring-white/5",
+            accent.glow,
+            criticalPulse && "ring-2 ring-red-500/50",
+          )}
+        >
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center sm:justify-center sm:gap-10">
+              <div className="relative flex shrink-0 flex-col items-center">
+                <div className="relative">
+                  <CircularRing score={score} accentClass={accent.ring} />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <motion.span
+                      key={score}
+                      initial={{ scale: 0.92, opacity: 0.6 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="text-4xl font-bold tabular-nums tracking-tight text-foreground sm:text-5xl"
+                    >
+                      {score}
+                    </motion.span>
+                    <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+                      / 100
+                    </span>
+                  </div>
+                </div>
+                <p className="mt-3 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  Server health
+                </p>
+                <Badge variant="outline" className={cn("mt-2 border font-semibold", accent.text)}>
+                  {status}
+                </Badge>
+              </div>
+              <div className="max-w-md flex-1 space-y-3 text-center sm:text-left">
+                <p className="text-sm leading-snug text-muted-foreground">{summary}</p>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted/60">
+                  <motion.div
+                    className={cn("h-full rounded-full", accent.bar)}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${score}%` }}
+                    transition={{ type: "spring", stiffness: 100, damping: 20 }}
+                  />
+                </div>
+                {trend.length > 1 ? (
+                  <div className="flex justify-center gap-1 sm:justify-start">
+                    {trend.map((p, i) => (
+                      <div
+                        key={`${p.at}-${i}`}
+                        className="flex flex-col items-center gap-0.5"
+                        title={new Date(p.at).toLocaleString()}
+                      >
+                        <div
+                          className="w-4 rounded-t bg-primary/45"
+                          style={{ height: `${Math.max(4, (p.score / 100) * 24)}px` }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <details className="group mt-5 border-t border-border/50 pt-4">
+              <summary className="flex cursor-pointer list-none items-center justify-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground sm:justify-start [&::-webkit-details-marker]:hidden">
+                <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" />
+                Breakdown
+              </summary>
+              <div className="mt-3 grid gap-3 text-xs sm:grid-cols-2">
+                <div className="rounded-xl border border-border/50 bg-muted/15 p-3">
+                  <p className="mb-2 font-medium text-foreground">Signals</p>
+                  <ul className="space-y-1 text-muted-foreground">
+                    <li>Process: {factors.process ? "running" : "not seen"}</li>
+                    <li>
+                      Game UDP: {factors.ports.game ? "bound" : "not seen"} · A2S:{" "}
+                      {factors.ports.a2s ? "bound" : "not seen"}
+                    </li>
+                    <li>
+                      Logs: {factors.logs.critical} critical, {factors.logs.errors} errors,{" "}
+                      {factors.logs.warnings} warnings
+                    </li>
+                    {factors.system ? (
+                      <li>
+                        System: RAM {factors.system.memoryPercent ?? "—"}% · load{" "}
+                        {factors.system.load != null ? factors.system.load.toFixed(2) : "—"} · disk{" "}
+                        {factors.system.diskPercent ?? "—"}%
+                      </li>
+                    ) : null}
+                  </ul>
+                </div>
+                <div className="rounded-xl border border-border/50 bg-muted/15 p-3">
+                  <p className="mb-2 font-medium text-foreground">Penalties</p>
+                  {penalties.length ? (
+                    <ul className="list-inside list-disc text-muted-foreground">
+                      {penalties.map((p) => (
+                        <li key={p}>{p}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-muted-foreground">None</p>
+                  )}
+                </div>
+              </div>
+            </details>
+          </CardContent>
+        </Card>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div

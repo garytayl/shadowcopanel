@@ -1,6 +1,8 @@
 "use server";
 
 import { ensureConfigured } from "@/lib/actions/guard";
+import { safeRecordActivity } from "@/lib/activity/log";
+import { diffReforgerConfig } from "@/lib/reforger/config-diff";
 import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
 import { applyModsMutation } from "@/lib/reforger/mods";
 import { validateModStack, type ModStackValidationResult } from "@/lib/reforger/mod-stack-analysis";
@@ -88,12 +90,28 @@ export async function saveModsAction(
       );
     }
 
+    const beforeNorm = normalizeReforgerConfig(p.value).config;
     const { config, issues } = applyModsMutation(cfg0, mods);
     const blocking = issues.filter((i) => i.severity === "error");
     if (blocking.length > 0) {
       return err(blocking.map((i) => i.message).join(" "));
     }
+    const diff = diffReforgerConfig(beforeNorm, config);
     const r = await saveRemoteConfig(config);
+    safeRecordActivity({
+      type: "mods_saved",
+      severity: "success",
+      title: "Mods saved",
+      message:
+        diff.summary.total > 0
+          ? `${diff.summary.total} semantic change(s) · ${r.bytes} bytes written`
+          : `No semantic diff · ${r.bytes} bytes written`,
+      metadata: {
+        bytes: r.bytes,
+        backupPath: r.backupPath,
+        diffSummary: diff.summary,
+      },
+    });
     return ok(r);
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));

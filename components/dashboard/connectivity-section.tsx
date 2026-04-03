@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo } from "react";
 import {
   Activity,
@@ -28,7 +29,7 @@ import type { DashboardSnapshot } from "@/lib/actions/dashboard";
 import type { JoinabilityResult } from "@/lib/types/connectivity";
 import { parseDfRootLine, parseFreeMemM, parseLoad1m } from "@/lib/utils/dashboard-metrics";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Hint } from "@/components/dashboard/hint";
 import {
@@ -95,6 +96,18 @@ function TrendIcon({ t }: { t: ControlLinkTrend }) {
   return <Minus className="size-3.5 text-muted-foreground" aria-hidden />;
 }
 
+function PortDot({ ok }: { ok: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-block size-2.5 shrink-0 rounded-full",
+        ok ? "bg-emerald-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.45)]",
+      )}
+      aria-hidden
+    />
+  );
+}
+
 export function ConnectivitySection({
   snap,
   loading,
@@ -105,6 +118,7 @@ export function ConnectivitySection({
   syncLoading,
   onRunJoinCheck,
   onSyncPublicIp,
+  variant = "full",
 }: {
   snap: DashboardSnapshot | null;
   loading: boolean;
@@ -115,6 +129,8 @@ export function ConnectivitySection({
   syncLoading: boolean;
   onRunJoinCheck: () => void;
   onSyncPublicIp: () => void;
+  /** `dashboard`: latency + port dots + minimal actions. */
+  variant?: "full" | "dashboard";
 }) {
   const st = snap?.status;
   const s = snap?.settings;
@@ -147,6 +163,77 @@ export function ConnectivitySection({
   const ipMismatch = Boolean(
     publicAddr && s?.host && !hostsEffectivelyMatch(publicAddr, s.host),
   );
+
+  const gamePort = s?.checkPort ?? 2001;
+  const a2sPort = 17777;
+  const gameUdp = snap?.portChecks?.find((p) => p.port === gamePort && p.protocol === "udp");
+  const a2sUdp = snap?.portChecks?.find((p) => p.port === a2sPort && p.protocol === "udp");
+  const gameOk = gameUdp?.status === "listening";
+  const a2sOk = a2sUdp?.status === "listening";
+
+  if (variant === "dashboard") {
+    return (
+      <Card className="rounded-2xl border-border/80 bg-gradient-to-br from-card/90 to-muted/10 shadow-md ring-1 ring-black/5 dark:ring-white/5">
+        <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-4 sm:gap-8">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Control latency
+              </p>
+              <p className="mt-0.5 font-mono text-3xl font-bold tabular-nums tracking-tight text-foreground">
+                {loading && !snap ? "…" : ms != null ? `${Math.round(ms)}` : "—"}
+                <span className="ml-1 text-sm font-normal text-muted-foreground">ms</span>
+              </p>
+              <span className="text-[10px] text-muted-foreground">panel → SSH</span>
+            </div>
+            <div className="flex flex-wrap gap-4 border-l border-border/60 pl-0 sm:border-l sm:pl-6">
+              <div className="flex items-center gap-2">
+                <PortDot ok={Boolean(gameOk)} />
+                <span className="font-mono text-sm text-foreground">UDP {gamePort}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <PortDot ok={Boolean(a2sOk)} />
+                <span className="font-mono text-sm text-foreground">UDP {a2sPort}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {ipMismatch ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="touch-manipulation border-amber-500/40"
+                onClick={onSyncPublicIp}
+                disabled={syncLoading}
+              >
+                {syncLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                Sync IP
+              </Button>
+            ) : null}
+            <Button
+              size="sm"
+              variant="secondary"
+              className="touch-manipulation"
+              onClick={onRunJoinCheck}
+              disabled={joinLoading || !s?.configured}
+            >
+              {joinLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Shield className="mr-2 size-4" />}
+              Join check
+            </Button>
+            <Link
+              href="/diagnostics"
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "sm" }),
+                "text-muted-foreground",
+              )}
+            >
+              Details
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <section className="rounded-2xl border border-border/70 bg-gradient-to-b from-card/80 to-card/30 p-4 shadow-sm ring-1 ring-primary/[0.06] md:p-5">

@@ -18,17 +18,25 @@ function severityVariant(
   return "outline";
 }
 
+function issueEmoji(sev: DetectedIssue["severity"]) {
+  if (sev === "critical" || sev === "error") return "❌";
+  return "⚠️";
+}
+
 export function LogAnalysisCard({
   analysis,
   title = "Log diagnostics",
   description = "Structured patterns from your server log tail — not a raw dump.",
   compact = false,
+  variant = "default",
 }: {
   analysis: LogAnalysisResult;
   title?: string;
   description?: string;
   /** Fewer paddings when nested (e.g. dashboard). */
   compact?: boolean;
+  /** Compact expandable rows for Home dashboard. */
+  variant?: "default" | "dashboard";
 }) {
   const { summary, issues } = analysis;
   const hi = summary.highestSeverity;
@@ -40,6 +48,51 @@ export function LogAnalysisCard({
         : hi === "warn"
           ? "secondary"
           : "outline";
+
+  if (variant === "dashboard" && issues.length > 0) {
+    return (
+      <div className="space-y-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          Alerts
+        </p>
+        <ul className="space-y-2">
+          {issues.map((i) => (
+            <li key={i.key}>
+              <details className="group rounded-2xl border border-border/70 bg-muted/15 open:bg-muted/25">
+                <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-sm font-medium [&::-webkit-details-marker]:hidden">
+                  <span aria-hidden>{issueEmoji(i.severity)}</span>
+                  <span className="min-w-0 flex-1 truncate text-foreground">{i.title}</span>
+                  <Badge variant={severityVariant(i.severity)} className="shrink-0 text-[10px]">
+                    {i.severity}
+                  </Badge>
+                </summary>
+                <div className="space-y-2 border-t border-border/50 px-3 pb-3 pt-2 text-xs text-muted-foreground">
+                  <p>{i.explanation}</p>
+                  {i.likelyCause ? (
+                    <p>
+                      <span className="font-medium text-foreground/90">Likely: </span>
+                      {i.likelyCause}
+                    </p>
+                  ) : null}
+                  {i.suggestedFix ? (
+                    <p>
+                      <span className="font-medium text-foreground/90">Try: </span>
+                      {i.suggestedFix}
+                    </p>
+                  ) : null}
+                  {i.matchedText ? (
+                    <pre className="max-h-20 overflow-auto rounded-lg bg-muted/50 p-2 font-mono text-[10px]">
+                      {i.matchedText}
+                    </pre>
+                  ) : null}
+                </div>
+              </details>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
 
   return (
     <Card className={compact ? "rounded-2xl border-border/80" : "rounded-2xl border-border/80"}>

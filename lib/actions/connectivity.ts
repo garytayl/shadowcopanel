@@ -1,6 +1,7 @@
 "use server";
 
 import { ensureConfigured } from "@/lib/actions/guard";
+import { safeRecordActivity } from "@/lib/activity/log";
 import { requireServerEnv } from "@/lib/env/server";
 import { runJoinabilityDiagnostics } from "@/lib/ssh/joinability";
 import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
@@ -16,6 +17,14 @@ export async function actionRunJoinabilityCheck(): Promise<
   if (g !== true) return g;
   try {
     const result = await runJoinabilityDiagnostics();
+    safeRecordActivity({
+      type: "joinability_check",
+      severity:
+        result.overall === "healthy" ? "success" : result.overall === "broken" ? "error" : "warn",
+      title: "Joinability check",
+      message: `Overall: ${result.overall}`,
+      metadata: { overall: result.overall, checkCount: result.checks.length },
+    });
     return ok(result);
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));
@@ -40,7 +49,15 @@ export async function actionSyncPublicAddressToPanelHost(): Promise<
     if (!p.ok) return err(p.error);
     const base = normalizeReforgerConfig(p.value as ReforgerConfig).config;
     const next: ReforgerConfig = { ...base, publicAddress: host };
-    return ok(await saveRemoteConfig(next));
+    const r = await saveRemoteConfig(next);
+    safeRecordActivity({
+      type: "config_saved",
+      severity: "success",
+      title: "Public address synced from panel",
+      message: `publicAddress → ${host}`,
+      metadata: { bytes: r.bytes, host },
+    });
+    return ok(r);
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));
   }

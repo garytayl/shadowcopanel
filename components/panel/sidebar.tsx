@@ -15,6 +15,7 @@ import {
   Wrench,
   CircleHelp,
   Store,
+  History,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -30,6 +31,7 @@ import {
 
 const links = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard },
+  { href: "/activity", label: "Activity", icon: History },
   { href: "/config", label: "Config", icon: FileJson },
   { href: "/marketplace", label: "Marketplace", icon: Store },
   { href: "/mods", label: "Mods", icon: Package },

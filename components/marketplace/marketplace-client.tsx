@@ -20,11 +20,20 @@ import {
 import { toast } from "sonner";
 
 import {
+  recordMarketplaceBulkAddAction,
+  recordMarketplaceImportAction,
+} from "@/lib/actions/activity";
+import {
   loadModsAction,
   saveModsAction,
   type ModRowPayload,
 } from "@/lib/actions/mods";
 import { actionValidateModStackFull } from "@/lib/actions/mod-stack-validation";
+import {
+  isConfigDiffEmpty,
+  previewModsSaveDiff,
+  type ConfigDiffResult,
+} from "@/lib/reforger/config-diff";
 import {
   catalogMapFromMods,
   validateModStack,
@@ -32,6 +41,7 @@ import {
 } from "@/lib/reforger/mod-stack-analysis";
 import { Hint } from "@/components/dashboard/hint";
 import { ConfigAnomalyBanner } from "@/components/panel/config-anomaly-banner";
+import { ConfigDiffDialog } from "@/components/panel/config-diff-dialog";
 import {
   ModStackValidationPanel,
   formatModStackSummaryLine,
@@ -146,6 +156,11 @@ export function MarketplaceClient() {
   const [enrichedValidation, setEnrichedValidation] = useState<ModStackValidationResult | null>(null);
   const [enriching, setEnriching] = useState(false);
   const [allowSaveDespiteStackErrors, setAllowSaveDespiteStackErrors] = useState(false);
+  const [remoteRawConfig, setRemoteRawConfig] = useState("");
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [pendingDiff, setPendingDiff] = useState<ConfigDiffResult | null>(null);
+  const [diffRawBefore, setDiffRawBefore] = useState<string | undefined>();
+  const [diffRawAfter, setDiffRawAfter] = useState<string | undefined>();
 
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -193,6 +208,7 @@ export function MarketplaceClient() {
     setStackAnomalies(r.data.anomalies);
     setMaxPlayers(r.data.maxPlayers);
     setEnrichedValidation(null);
+    setRemoteRawConfig(r.data.rawConfig);
   }, []);
 
   useEffect(() => {
@@ -288,6 +304,11 @@ export function MarketplaceClient() {
     } else {
       toast.success("Added to stack");
     }
+    if (errs.length === 0) {
+      void recordMarketplaceImportAction(m.modId, m.name).then((r) => {
+        if (!r.ok) console.warn(r.error);
+      });
+    }
   }
 
   function addWithDependencies(detail: WorkshopCatalogMod) {
@@ -335,9 +356,42 @@ export function MarketplaceClient() {
     } else {
       toast.success(`Added ${toAppend.length} mod(s) to stack`);
     }
+    if (errs.length === 0) {
+      void recordMarketplaceBulkAddAction(
+        toAppend.length,
+        `${toAppend.length} mod(s) including dependencies (${detail.name})`,
+      ).then((r) => {
+        if (!r.ok) console.warn(r.error);
+      });
+    }
   }
 
-  async function saveStack() {
+  function prepareSaveStack() {
+    if (liveValidation.summary.errors > 0 && !allowSaveDespiteStackErrors) {
+      toast.error("Fix stack validation errors or enable the override checkbox.");
+      return;
+    }
+    const preview = previewModsSaveDiff(remoteRawConfig, rowsToPayload(stack));
+    if (!preview.ok) {
+      if ("parseError" in preview) {
+        toast.error(preview.parseError);
+        return;
+      }
+      toast.error(preview.mutationErrors.map((i) => i.message).join(" "));
+      return;
+    }
+    if (isConfigDiffEmpty(preview.diff)) {
+      toast.message("No changes to save");
+      return;
+    }
+    setPendingDiff(preview.diff);
+    setDiffRawBefore(preview.rawBefore);
+    setDiffRawAfter(preview.rawAfter);
+    setDiffOpen(true);
+  }
+
+  async function executeSaveStack() {
+    setDiffOpen(false);
     setSaving(true);
     const r = await saveModsAction(rowsToPayload(stack), {
       allowStackValidationErrors: allowSaveDespiteStackErrors,
@@ -356,6 +410,7 @@ export function MarketplaceClient() {
       toast.message("Normalization", { description: warn.slice(0, 3).map((i) => i.message).join(" · ") });
     }
     setAllowSaveDespiteStackErrors(false);
+    setPendingDiff(null);
     await loadStack();
   }
 
@@ -460,6 +515,17 @@ export function MarketplaceClient() {
 
   return (
     <div className="space-y-6" data-library-rev={libraryTick}>
+      <ConfigDiffDialog
+        open={diffOpen}
+        onOpenChange={setDiffOpen}
+        diff={pendingDiff}
+        title="Review mod list changes"
+        description="Normalized diff vs the last loaded remote config. Confirm to write game.mods."
+        rawBefore={diffRawBefore}
+        rawAfter={diffRawAfter}
+        confirmLabel="Save to server"
+        onConfirm={() => void executeSaveStack()}
+      />
       <ConfigAnomalyBanner issues={stackAnomalies} />
       {dirty ? (
         <div className="flex flex-col gap-3 rounded-2xl border border-amber-500/35 bg-amber-500/[0.07] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
@@ -477,7 +543,7 @@ export function MarketplaceClient() {
             type="button"
             size="sm"
             className="h-10 shrink-0 touch-manipulation sm:h-9"
-            onClick={() => void saveStack()}
+            onClick={prepareSaveStack}
             disabled={saving}
           >
             {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
@@ -938,7 +1004,7 @@ export function MarketplaceClient() {
                   <Button
                     type="button"
                     className="h-11 w-full touch-manipulation"
-                    onClick={() => void saveStack()}
+                    onClick={prepareSaveStack}
                     disabled={saving || !dirty}
                   >
                     {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}

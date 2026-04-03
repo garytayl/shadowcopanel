@@ -12,8 +12,15 @@ import {
   saveRawConfigAction,
   saveRemoteConfigAction,
 } from "@/lib/actions/config";
+import {
+  isConfigDiffEmpty,
+  previewFormSaveDiff,
+  previewRawSaveDiff,
+  type ConfigDiffResult,
+} from "@/lib/reforger/config-diff";
 import { Hint } from "@/components/dashboard/hint";
 import { ConfigAnomalyBanner } from "@/components/panel/config-anomaly-banner";
+import { ConfigDiffDialog } from "@/components/panel/config-diff-dialog";
 import { LabelWithHint, TitleWithHint } from "@/components/panel/label-with-hint";
 import { downloadTextFile } from "@/lib/utils/download";
 import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
@@ -22,6 +29,7 @@ import {
   configToFormValues,
   defaultFormValues,
   parseConfigJson,
+  type ReforgerConfig,
   type ReforgerFormValues,
 } from "@/lib/types/reforger-config";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -38,6 +46,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+
+type PendingSaveKind = "form" | "raw";
 
 function NumberInput({
   label,
@@ -71,6 +81,12 @@ export function ConfigEditor() {
   const [anomalies, setAnomalies] = useState<ConfigNormalizationIssue[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [baselineParsed, setBaselineParsed] = useState<ReforgerConfig | null>(null);
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [pendingDiff, setPendingDiff] = useState<ConfigDiffResult | null>(null);
+  const [diffRawBefore, setDiffRawBefore] = useState<string | undefined>();
+  const [diffRawAfter, setDiffRawAfter] = useState<string | undefined>();
+  const [pendingSaveKind, setPendingSaveKind] = useState<PendingSaveKind | null>(null);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     setLoading(true);
@@ -83,6 +99,7 @@ export function ConfigEditor() {
     setForm(r.data.form);
     setRaw(r.data.raw);
     setAnomalies(r.data.anomalies);
+    setBaselineParsed(r.data.parsed);
     if (!opts?.silent) {
       toast.success("Loaded remote config");
     }
@@ -95,7 +112,25 @@ export function ConfigEditor() {
     return () => cancelAnimationFrame(id);
   }, [load]);
 
-  const saveForm = async () => {
+  const prepareSaveForm = () => {
+    if (!baselineParsed) {
+      toast.error("Load the remote config first.");
+      return;
+    }
+    const { diff, rawBefore, rawAfter } = previewFormSaveDiff(baselineParsed, form);
+    if (isConfigDiffEmpty(diff)) {
+      toast.message("No changes to save");
+      return;
+    }
+    setPendingDiff(diff);
+    setDiffRawBefore(rawBefore);
+    setDiffRawAfter(rawAfter);
+    setPendingSaveKind("form");
+    setDiffOpen(true);
+  };
+
+  const executeSaveForm = async () => {
+    setDiffOpen(false);
     setSaving(true);
     const r = await saveRemoteConfigAction(form);
     setSaving(false);
@@ -107,6 +142,8 @@ export function ConfigEditor() {
     toast.success(
       `Saved (${r.data.bytes} bytes)${b ? ` · backup: ${b}` : r.data.backupNote ? ` · ${r.data.backupNote}` : ""}`,
     );
+    setPendingSaveKind(null);
+    setPendingDiff(null);
     await load();
   };
 
@@ -124,7 +161,29 @@ export function ConfigEditor() {
     await load();
   };
 
-  const saveRaw = async () => {
+  const prepareSaveRaw = () => {
+    if (!baselineParsed) {
+      toast.error("Load the remote config first.");
+      return;
+    }
+    const preview = previewRawSaveDiff(baselineParsed, raw);
+    if (!preview.ok) {
+      toast.error(preview.error);
+      return;
+    }
+    if (isConfigDiffEmpty(preview.diff)) {
+      toast.message("No changes to save");
+      return;
+    }
+    setPendingDiff(preview.diff);
+    setDiffRawBefore(preview.rawBefore);
+    setDiffRawAfter(preview.rawAfter);
+    setPendingSaveKind("raw");
+    setDiffOpen(true);
+  };
+
+  const executeSaveRaw = async () => {
+    setDiffOpen(false);
     setSaving(true);
     const r = await saveRawConfigAction(raw);
     setSaving(false);
@@ -136,6 +195,8 @@ export function ConfigEditor() {
     toast.success(
       `Saved raw JSON (${r.data.bytes} bytes)${b ? ` · backup: ${b}` : r.data.backupNote ? ` · ${r.data.backupNote}` : ""}`,
     );
+    setPendingSaveKind(null);
+    setPendingDiff(null);
     await load();
   };
 
@@ -174,6 +235,20 @@ export function ConfigEditor() {
 
   return (
     <div className="space-y-6">
+      <ConfigDiffDialog
+        open={diffOpen}
+        onOpenChange={setDiffOpen}
+        diff={pendingDiff}
+        title="Review config changes"
+        description="Comparison of normalized JSON: last loaded from the server vs what you’re about to save."
+        rawBefore={diffRawBefore}
+        rawAfter={diffRawAfter}
+        confirmLabel="Save to server"
+        onConfirm={() => {
+          if (pendingSaveKind === "form") void executeSaveForm();
+          else if (pendingSaveKind === "raw") void executeSaveRaw();
+        }}
+      />
       <ConfigAnomalyBanner issues={anomalies} />
       <Alert className="rounded-2xl border-amber-500/40 bg-amber-500/5">
         <AlertTitle className="flex items-center gap-2">
@@ -532,7 +607,7 @@ export function ConfigEditor() {
             </Card>
           </motion.div>
           <div className="mt-4 flex justify-end">
-            <Button onClick={() => void saveForm()} disabled={saving}>
+            <Button onClick={prepareSaveForm} disabled={saving}>
               {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
               Save form to server
             </Button>
@@ -562,7 +637,7 @@ export function ConfigEditor() {
                 <Button type="button" variant="secondary" onClick={applyRawToForm}>
                   Apply JSON to form
                 </Button>
-                <Button type="button" onClick={() => void saveRaw()} disabled={saving}>
+                <Button type="button" onClick={prepareSaveRaw} disabled={saving}>
                   {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
                   Save raw to server
                 </Button>
