@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { buildReforgerBootstrapUserData } from "@/lib/provision/cloud-init";
 import { launchUbuntuWithSsh } from "@/lib/provision/aws-ec2";
-import { isAwsEc2ProvisionEnabled } from "@/lib/provision/aws-env";
+import { isAwsEc2ProvisionEnabledAsync } from "@/lib/provision/aws-env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ function sanitizeToken(s: string): string {
 }
 
 export async function POST(req: Request) {
-  if (!isAwsEc2ProvisionEnabled()) {
+  if (!(await isAwsEc2ProvisionEnabledAsync())) {
     return NextResponse.json(
       {
         error:

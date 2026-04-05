@@ -4,16 +4,19 @@ import {
   listAwsInstanceTypesForUi,
   listAwsRegions,
 } from "@/lib/provision/aws-ec2";
-import { getAwsDefaultRegion, isAwsEc2ProvisionEnabled } from "@/lib/provision/aws-env";
+import {
+  getAwsDefaultRegionAsync,
+  isAwsEc2ProvisionEnabledAsync,
+} from "@/lib/provision/aws-env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  if (!isAwsEc2ProvisionEnabled()) {
+  if (!(await isAwsEc2ProvisionEnabledAsync())) {
     return NextResponse.json({
       enabled: false,
-      defaultRegion: getAwsDefaultRegion(),
+      defaultRegion: await getAwsDefaultRegionAsync(),
       regions: [] as { id: string; name: string }[],
       instanceTypes: listAwsInstanceTypesForUi(),
     });
@@ -22,7 +25,7 @@ export async function GET() {
     const regions = await listAwsRegions();
     return NextResponse.json({
       enabled: true,
-      defaultRegion: getAwsDefaultRegion(),
+      defaultRegion: await getAwsDefaultRegionAsync(),
       regions,
       instanceTypes: listAwsInstanceTypesForUi(),
     });
@@ -32,7 +35,7 @@ export async function GET() {
       {
         enabled: true,
         error: msg,
-        defaultRegion: getAwsDefaultRegion(),
+        defaultRegion: await getAwsDefaultRegionAsync(),
         regions: [],
         instanceTypes: listAwsInstanceTypesForUi(),
       },

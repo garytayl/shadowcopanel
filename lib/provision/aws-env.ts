@@ -1,16 +1,16 @@
 import "server-only";
 
-import { readAwsCredentialsFromDiskSync } from "@/lib/provision/aws-credentials-store";
+import { readStoredAwsCredentialsAsync } from "@/lib/provision/aws-credentials-store";
 
 /**
- * AWS credentials: environment variables win (good for Vercel/production).
- * If unset, credentials may be stored in data/aws-credentials.json via the app UI.
+ * AWS credentials: environment variables win (optional for operators).
+ * Otherwise credentials come from Upstash Redis (hosted) or data/aws-credentials.json (local).
  */
-export function getAwsCredentials(): {
+export async function getAwsCredentialsAsync(): Promise<{
   accessKeyId: string;
   secretAccessKey: string;
   sessionToken?: string;
-} | null {
+} | null> {
   const accessKeyId = process.env.AWS_ACCESS_KEY_ID?.trim();
   const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
   if (accessKeyId && secretAccessKey) {
@@ -22,12 +22,12 @@ export function getAwsCredentials(): {
     };
   }
 
-  const disk = readAwsCredentialsFromDiskSync();
-  if (!disk) return null;
+  const stored = await readStoredAwsCredentialsAsync();
+  if (!stored) return null;
   return {
-    accessKeyId: disk.accessKeyId.trim(),
-    secretAccessKey: disk.secretAccessKey.trim(),
-    sessionToken: disk.sessionToken?.trim() || undefined,
+    accessKeyId: stored.accessKeyId.trim(),
+    secretAccessKey: stored.secretAccessKey.trim(),
+    sessionToken: stored.sessionToken?.trim() || undefined,
   };
 }
 
@@ -37,27 +37,27 @@ export function hasAwsCredentialsInEnvironment(): boolean {
   );
 }
 
-export function hasAwsCredentialsInFile(): boolean {
-  return readAwsCredentialsFromDiskSync() !== null;
+export async function hasAwsCredentialsStoredAsync(): Promise<boolean> {
+  return (await readStoredAwsCredentialsAsync()) !== null;
 }
 
-export function getAwsDefaultRegion(): string {
+export async function getAwsDefaultRegionAsync(): Promise<string> {
   const env = process.env.AWS_REGION?.trim() || process.env.AWS_DEFAULT_REGION?.trim();
   if (env) return env;
-  const disk = readAwsCredentialsFromDiskSync();
-  if (disk?.region?.trim()) return disk.region.trim();
+  const stored = await readStoredAwsCredentialsAsync();
+  if (stored?.region?.trim()) return stored.region.trim();
   return "us-east-1";
 }
 
 /** Security group ingress CIDR for provisioned instances (SSH + game UDP). */
-export function getAwsProvisionSgCidr(): string {
+export async function getAwsProvisionSgCidrAsync(): Promise<string> {
   const env = process.env.AWS_PROVISION_SG_CIDR?.trim();
   if (env) return env;
-  const disk = readAwsCredentialsFromDiskSync();
-  if (disk?.sgCidr?.trim()) return disk.sgCidr.trim();
+  const stored = await readStoredAwsCredentialsAsync();
+  if (stored?.sgCidr?.trim()) return stored.sgCidr.trim();
   return "0.0.0.0/0";
 }
 
-export function isAwsEc2ProvisionEnabled(): boolean {
-  return getAwsCredentials() !== null;
+export async function isAwsEc2ProvisionEnabledAsync(): Promise<boolean> {
+  return (await getAwsCredentialsAsync()) !== null;
 }

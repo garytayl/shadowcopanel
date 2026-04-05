@@ -15,13 +15,13 @@ import {
 } from "@aws-sdk/client-ec2";
 
 import {
-  getAwsCredentials,
-  getAwsDefaultRegion,
-  getAwsProvisionSgCidr,
+  getAwsCredentialsAsync,
+  getAwsDefaultRegionAsync,
+  getAwsProvisionSgCidrAsync,
 } from "@/lib/provision/aws-env";
 
-export function ec2Client(region: string): EC2Client {
-  const c = getAwsCredentials();
+export async function ec2Client(region: string): Promise<EC2Client> {
+  const c = await getAwsCredentialsAsync();
   if (!c) {
     throw new Error("AWS credentials are not configured.");
   }
@@ -36,7 +36,7 @@ export function ec2Client(region: string): EC2Client {
 }
 
 export async function listAwsRegions(): Promise<{ id: string; name: string }[]> {
-  const client = ec2Client(getAwsDefaultRegion());
+  const client = await ec2Client(await getAwsDefaultRegionAsync());
   const out = await client.send(new DescribeRegionsCommand({}));
   const regions = (out.Regions ?? [])
     .map((r) => ({ id: r.RegionName ?? "", name: r.RegionName ?? "" }))
@@ -128,7 +128,7 @@ export type LaunchEc2Result = {
 export async function launchUbuntuWithSsh(
   input: LaunchEc2Input,
 ): Promise<LaunchEc2Result> {
-  const client = ec2Client(input.region);
+  const client = await ec2Client(input.region);
 
   await client.send(
     new ImportKeyPairCommand({
@@ -152,7 +152,7 @@ export async function launchUbuntuWithSsh(
     throw new Error("CreateSecurityGroup did not return a group id.");
   }
 
-  const cidr = getAwsProvisionSgCidr();
+  const cidr = await getAwsProvisionSgCidrAsync();
 
   await client.send(
     new AuthorizeSecurityGroupIngressCommand({
@@ -221,7 +221,7 @@ export async function describeInstance(
   publicIp: string | null;
   name: string | undefined;
 }> {
-  const client = ec2Client(region);
+  const client = await ec2Client(region);
   const out = await client.send(
     new DescribeInstancesCommand({
       InstanceIds: [instanceId],

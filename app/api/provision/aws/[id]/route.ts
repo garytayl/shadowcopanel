@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { describeInstance } from "@/lib/provision/aws-ec2";
-import { isAwsEc2ProvisionEnabled } from "@/lib/provision/aws-env";
+import { isAwsEc2ProvisionEnabledAsync } from "@/lib/provision/aws-env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(req: Request, ctx: Ctx) {
-  if (!isAwsEc2ProvisionEnabled()) {
+  if (!(await isAwsEc2ProvisionEnabledAsync())) {
     return NextResponse.json({ error: "Not configured" }, { status: 503 });
   }
 

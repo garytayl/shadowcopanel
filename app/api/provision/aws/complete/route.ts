@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
-import { isAwsEc2ProvisionEnabled } from "@/lib/provision/aws-env";
+import { isAwsEc2ProvisionEnabledAsync } from "@/lib/provision/aws-env";
 import { describeInstance } from "@/lib/provision/aws-ec2";
 import { ACTIVE_PROFILE_COOKIE } from "@/lib/server-profiles/resolve";
 import { upsertProfile } from "@/lib/server-profiles/store";
@@ -28,7 +28,7 @@ function validatePrivateKey(s: string): boolean {
 }
 
 export async function POST(req: Request) {
-  if (!isAwsEc2ProvisionEnabled()) {
+  if (!(await isAwsEc2ProvisionEnabledAsync())) {
     return NextResponse.json({ error: "Not configured" }, { status: 503 });
   }
 
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
   }
 
   const profileName =
-    String(body.profileName ?? "EC2 instance").trim() || "EC2 instance";
+    String(body.profileName ?? "Game server").trim() || "Game server";
 
   let d;
   try {

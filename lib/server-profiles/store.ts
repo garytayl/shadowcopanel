@@ -4,6 +4,7 @@ import { existsSync } from "fs";
 import fs from "fs/promises";
 import path from "path";
 
+import { getRedis, isUpstashRedisConfigured, REDIS_KEYS } from "@/lib/persistence/upstash-redis";
 import type { ServerProfile, ServerProfileId } from "@/lib/server-profiles/types";
 
 const FILE_VERSION = 1;
@@ -41,26 +42,69 @@ function isProfile(x: unknown): x is ServerProfile {
   );
 }
 
-export async function readProfilesFromDisk(): Promise<ServerProfile[]> {
+function parseFileShape(raw: unknown): ServerProfile[] {
+  if (raw == null || typeof raw !== "object") return [];
+  const profs = (raw as FileShape).profiles;
+  if (!Array.isArray(profs)) return [];
+  return profs.filter(isProfile);
+}
+
+async function readProfilesFromFile(): Promise<ServerProfile[]> {
   const p = getServerProfilesPath();
   try {
     if (!existsSync(p)) return [];
     const raw = await fs.readFile(p, "utf8");
     const j = JSON.parse(raw) as unknown;
-    if (j == null || typeof j !== "object") return [];
-    const profs = (j as FileShape).profiles;
-    if (!Array.isArray(profs)) return [];
-    return profs.filter(isProfile);
+    return parseFileShape(j);
   } catch {
     return [];
   }
 }
 
-export async function writeProfilesToDisk(profiles: ServerProfile[]): Promise<void> {
+async function writeProfilesToFile(profiles: ServerProfile[]): Promise<void> {
   const p = getServerProfilesPath();
   await ensureDir(p);
   const payload: FileShape = { version: FILE_VERSION, profiles };
   await fs.writeFile(p, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+}
+
+async function readProfilesFromRedis(): Promise<ServerProfile[]> {
+  const redis = getRedis();
+  if (!redis) return [];
+  const raw = await redis.get<string>(REDIS_KEYS.serverProfiles);
+  if (raw == null || raw === "") return [];
+  try {
+    const j = JSON.parse(raw) as unknown;
+    return parseFileShape(j);
+  } catch {
+    return [];
+  }
+}
+
+async function writeProfilesToRedis(profiles: ServerProfile[]): Promise<void> {
+  const redis = getRedis();
+  if (!redis) throw new Error("Redis is not configured.");
+  const payload: FileShape = { version: FILE_VERSION, profiles };
+  await redis.set(REDIS_KEYS.serverProfiles, JSON.stringify(payload));
+}
+
+function useRedisForProfiles(): boolean {
+  return isUpstashRedisConfigured();
+}
+
+export async function readProfilesFromDisk(): Promise<ServerProfile[]> {
+  if (useRedisForProfiles()) {
+    return readProfilesFromRedis();
+  }
+  return readProfilesFromFile();
+}
+
+export async function writeProfilesToDisk(profiles: ServerProfile[]): Promise<void> {
+  if (useRedisForProfiles()) {
+    await writeProfilesToRedis(profiles);
+    return;
+  }
+  await writeProfilesToFile(profiles);
 }
 
 export async function getProfileById(id: ServerProfileId): Promise<ServerProfile | null> {

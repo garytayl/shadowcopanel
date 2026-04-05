@@ -4,6 +4,8 @@ import { existsSync, readFileSync } from "fs";
 import fs from "fs/promises";
 import path from "path";
 
+import { getRedis, isUpstashRedisConfigured, REDIS_KEYS } from "@/lib/persistence/upstash-redis";
+
 export type StoredAwsCredentials = {
   accessKeyId: string;
   secretAccessKey: string;
@@ -45,7 +47,7 @@ export function readAwsCredentialsFromDiskSync(): StoredAwsCredentials | null {
   }
 }
 
-export async function writeAwsCredentialsToDisk(
+async function writeAwsCredentialsToDisk(
   data: Omit<StoredAwsCredentials, "updatedAt">,
 ): Promise<void> {
   const p = getAwsCredentialsFilePath();
@@ -57,7 +59,7 @@ export async function writeAwsCredentialsToDisk(
   await fs.writeFile(p, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
-export async function deleteAwsCredentialsFile(): Promise<boolean> {
+async function deleteAwsCredentialsFromDisk(): Promise<boolean> {
   const p = getAwsCredentialsFilePath();
   try {
     if (!existsSync(p)) return false;
@@ -66,6 +68,50 @@ export async function deleteAwsCredentialsFile(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Prefer Redis when configured; otherwise local file (dev / self-hosted). */
+export async function readStoredAwsCredentialsAsync(): Promise<StoredAwsCredentials | null> {
+  if (isUpstashRedisConfigured()) {
+    const redis = getRedis();
+    if (!redis) return null;
+    const raw = await redis.get<string>(REDIS_KEYS.awsCredentials);
+    if (raw == null || raw === "") return null;
+    try {
+      const j = JSON.parse(raw) as unknown;
+      if (!isStoredShape(j)) return null;
+      return j;
+    } catch {
+      return null;
+    }
+  }
+  return readAwsCredentialsFromDiskSync();
+}
+
+export async function writeStoredAwsCredentialsAsync(
+  data: Omit<StoredAwsCredentials, "updatedAt">,
+): Promise<void> {
+  const payload: StoredAwsCredentials = {
+    ...data,
+    updatedAt: new Date().toISOString(),
+  };
+  if (isUpstashRedisConfigured()) {
+    const redis = getRedis();
+    if (!redis) throw new Error("Redis is not configured.");
+    await redis.set(REDIS_KEYS.awsCredentials, JSON.stringify(payload));
+    return;
+  }
+  await writeAwsCredentialsToDisk(data);
+}
+
+export async function deleteStoredAwsCredentialsAsync(): Promise<boolean> {
+  if (isUpstashRedisConfigured()) {
+    const redis = getRedis();
+    if (!redis) return false;
+    const n = await redis.del(REDIS_KEYS.awsCredentials);
+    return n > 0;
+  }
+  return deleteAwsCredentialsFromDisk();
 }
 
 export function maskAccessKeyId(id: string): string {

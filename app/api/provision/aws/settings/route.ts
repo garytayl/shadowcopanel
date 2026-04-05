@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 
 import {
-  deleteAwsCredentialsFile,
+  deleteStoredAwsCredentialsAsync,
   maskAccessKeyId,
-  readAwsCredentialsFromDiskSync,
-  writeAwsCredentialsToDisk,
+  readStoredAwsCredentialsAsync,
+  writeStoredAwsCredentialsAsync,
 } from "@/lib/provision/aws-credentials-store";
 import {
-  getAwsDefaultRegion,
-  getAwsProvisionSgCidr,
+  getAwsDefaultRegionAsync,
+  getAwsProvisionSgCidrAsync,
   hasAwsCredentialsInEnvironment,
-  hasAwsCredentialsInFile,
-  isAwsEc2ProvisionEnabled,
+  hasAwsCredentialsStoredAsync,
+  isAwsEc2ProvisionEnabledAsync,
 } from "@/lib/provision/aws-env";
 
 export const runtime = "nodejs";
@@ -19,10 +19,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const env = hasAwsCredentialsInEnvironment();
-  const file = hasAwsCredentialsInFile();
-  const disk = readAwsCredentialsFromDiskSync();
-  const configured = isAwsEc2ProvisionEnabled();
-  const source: "env" | "file" | "none" = env ? "env" : file ? "file" : "none";
+  const stored = await hasAwsCredentialsStoredAsync();
+  const disk = await readStoredAwsCredentialsAsync();
+  const configured = await isAwsEc2ProvisionEnabledAsync();
+  const source: "env" | "file" | "none" = env ? "env" : stored ? "file" : "none";
 
   let maskedAccessKeyId: string | null = null;
   if (env) {
@@ -35,15 +35,15 @@ export async function GET() {
   return NextResponse.json({
     configured,
     source,
-    region: getAwsDefaultRegion(),
-    sgCidr: getAwsProvisionSgCidr(),
+    region: await getAwsDefaultRegionAsync(),
+    sgCidr: await getAwsProvisionSgCidrAsync(),
     maskedAccessKeyId,
-    /** True when credentials are not coming from process env — app may save to disk. */
+    /** True when credentials are not coming from process env — app may save to Redis/disk. */
     canSaveCredentialsInApp: !env,
-    hasSavedFile: file,
+    hasSavedFile: stored,
     envOverrides:
-      env && file
-        ? "Environment variables are in use; a saved file also exists but is ignored until env vars are removed."
+      env && stored
+        ? "Environment variables are in use; saved credentials also exist but are ignored until env vars are removed."
         : null,
   });
 }
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
       ? String(body.sgCidr).trim()
       : null;
 
-  await writeAwsCredentialsToDisk({
+  await writeStoredAwsCredentialsAsync({
     accessKeyId,
     secretAccessKey,
     region,
@@ -107,11 +107,11 @@ export async function DELETE() {
     return NextResponse.json(
       {
         error:
-          "Cannot clear file while environment credentials are set. Remove AWS_* from the environment first.",
+          "Cannot clear saved credentials while environment credentials are set. Remove AWS_* from the environment first.",
       },
       { status: 409 },
     );
   }
-  const ok = await deleteAwsCredentialsFile();
+  const ok = await deleteStoredAwsCredentialsAsync();
   return NextResponse.json({ ok, removed: ok });
 }
