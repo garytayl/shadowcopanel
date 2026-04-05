@@ -14,7 +14,11 @@ import {
   type RunInstancesCommandInput,
 } from "@aws-sdk/client-ec2";
 
-import { getAwsCredentials, getAwsDefaultRegion } from "@/lib/provision/aws-env";
+import {
+  getAwsCredentials,
+  getAwsDefaultRegion,
+  getAwsProvisionSgCidr,
+} from "@/lib/provision/aws-env";
 
 export function ec2Client(region: string): EC2Client {
   const c = getAwsCredentials();
@@ -148,8 +152,7 @@ export async function launchUbuntuWithSsh(
     throw new Error("CreateSecurityGroup did not return a group id.");
   }
 
-  const cidr =
-    process.env.AWS_PROVISION_SG_CIDR?.trim() || "0.0.0.0/0";
+  const cidr = getAwsProvisionSgCidr();
 
   await client.send(
     new AuthorizeSecurityGroupIngressCommand({

@@ -24,14 +24,27 @@ type Options = {
   instanceTypes: { id: string; label: string }[];
 };
 
+type AwsSettings = {
+  configured: boolean;
+  source: "env" | "file" | "none";
+  region: string;
+  sgCidr: string;
+  maskedAccessKeyId: string | null;
+  canSaveCredentialsInApp: boolean;
+  hasSavedFile: boolean;
+  envOverrides: string | null;
+};
+
 type Props = {
   onProvisioned: () => void;
 };
 
 export function AwsProvisionCard({ onProvisioned }: Props) {
   const [opts, setOpts] = useState<Options | null>(null);
+  const [awsSettings, setAwsSettings] = useState<AwsSettings | null>(null);
   const [loadingOpts, setLoadingOpts] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [savingCreds, setSavingCreds] = useState(false);
 
   const [label, setLabel] = useState("reforger");
   const [region, setRegion] = useState("");
@@ -40,12 +53,23 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
   const [privateKey, setPrivateKey] = useState("");
   const [checkPort, setCheckPort] = useState("2001");
 
-  const loadOpts = useCallback(async () => {
+  const [connectAccessKeyId, setConnectAccessKeyId] = useState("");
+  const [connectSecretKey, setConnectSecretKey] = useState("");
+  const [connectRegion, setConnectRegion] = useState("us-east-1");
+  const [connectSessionToken, setConnectSessionToken] = useState("");
+  const [connectSgCidr, setConnectSgCidr] = useState("0.0.0.0/0");
+
+  const loadAll = useCallback(async () => {
     setLoadingOpts(true);
     try {
-      const r = await fetch("/api/provision/aws/options", { cache: "no-store" });
-      const j = (await r.json()) as Options;
+      const [rOpts, rSet] = await Promise.all([
+        fetch("/api/provision/aws/options", { cache: "no-store" }),
+        fetch("/api/provision/aws/settings", { cache: "no-store" }),
+      ]);
+      const j = (await rOpts.json()) as Options;
+      const s = (await rSet.json()) as AwsSettings;
       setOpts(j);
+      setAwsSettings(s);
       setRegion((prev) => {
         if (prev) return prev;
         const def = j.defaultRegion;
@@ -63,14 +87,61 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
         regions: [],
         instanceTypes: [],
       });
+      setAwsSettings(null);
     } finally {
       setLoadingOpts(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadOpts();
-  }, [loadOpts]);
+    void loadAll();
+  }, [loadAll]);
+
+  async function saveAwsCredentials() {
+    const accessKeyId = connectAccessKeyId.trim();
+    const secretAccessKey = connectSecretKey.trim();
+    const reg = connectRegion.trim();
+    if (!accessKeyId || !secretAccessKey || !reg) {
+      toast.error("Access key ID, secret access key, and region are required.");
+      return;
+    }
+    setSavingCreds(true);
+    try {
+      const r = await fetch("/api/provision/aws/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accessKeyId,
+          secretAccessKey,
+          region: reg,
+          sessionToken: connectSessionToken.trim() || null,
+          sgCidr: connectSgCidr.trim() || null,
+        }),
+      });
+      const j = (await r.json()) as { error?: string };
+      if (!r.ok) throw new Error(j.error ?? "Save failed");
+      toast.success("AWS credentials saved on this server.");
+      setConnectSecretKey("");
+      await loadAll();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSavingCreds(false);
+    }
+  }
+
+  async function removeAwsCredentialsFile() {
+    if (!confirm("Remove saved AWS credentials from this server?")) return;
+    try {
+      const r = await fetch("/api/provision/aws/settings", { method: "DELETE" });
+      const j = (await r.json()) as { error?: string };
+      if (!r.ok) throw new Error(j.error ?? "Remove failed");
+      toast.success("Saved credentials removed.");
+      await loadAll();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Remove failed");
+    }
+  }
 
   async function runProvision() {
     if (!opts?.enabled) return;
@@ -167,13 +238,14 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
       <Card className="rounded-2xl border-border/80">
         <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" aria-hidden />
-          Loading AWS options…
+          Loading AWS…
         </CardContent>
       </Card>
     );
   }
 
   if (!opts?.enabled) {
+    const credentialsLockedByEnv = awsSettings?.canSaveCredentialsInApp === false;
     return (
       <Card className="rounded-2xl border-border/80 border-dashed">
         <CardHeader>
@@ -182,27 +254,108 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
             New EC2 (Amazon API)
           </CardTitle>
           <CardDescription>
-            Uses the AWS API from this app—no need to click around the EC2 console for create. You still
-            need IAM keys on the server.
+            Connect your AWS account here so you do not have to edit <code className="text-xs">.env</code>{" "}
+            or hosting env vars for keys. Launching instances still uses the API—no EC2 click-through for
+            create.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm leading-relaxed text-muted-foreground">
-          <p>
-            Set <code className="text-xs text-foreground">AWS_ACCESS_KEY_ID</code> and{" "}
-            <code className="text-xs text-foreground">AWS_SECRET_ACCESS_KEY</code> (and usually{" "}
-            <code className="text-xs text-foreground">AWS_REGION</code>) in{" "}
-            <code className="text-xs text-foreground">.env.local</code> or your host env, then restart. Use
-            an IAM user with EC2 permissions (run instances, key pairs, security groups, describe).
-          </p>
-          <p className="text-xs">
-            Optional: <code className="text-foreground">AWS_SESSION_TOKEN</code> for temporary credentials;
-            <code className="text-foreground"> AWS_PROVISION_SG_CIDR</code> to restrict SSH/game ports
-            (default 0.0.0.0/0 — wide open).
-          </p>
+        <CardContent className="space-y-4 text-sm leading-relaxed text-muted-foreground">
+          {awsSettings?.envOverrides ? (
+            <p className="rounded-xl border border-amber-500/40 bg-amber-500/[0.07] px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+              {awsSettings.envOverrides}
+            </p>
+          ) : null}
+
+          {credentialsLockedByEnv ? (
+            <div className="space-y-2">
+              <p>
+                This host already has <code className="text-xs text-foreground">AWS_ACCESS_KEY_ID</code> and{" "}
+                <code className="text-xs text-foreground">AWS_SECRET_ACCESS_KEY</code> in the environment.
+                EC2 provisioning is enabled from those values. To use the form below instead, remove those
+                env vars and reload.
+              </p>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs">
+                One-time outside the app: create an AWS account and an IAM user with EC2 permissions, then
+                create <strong>access keys</strong> (you can use the AWS CLI or the IAM page once). Paste
+                them here—keys are stored only on this server in{" "}
+                <code className="text-foreground">data/aws-credentials.json</code> (gitignored).
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="aws-ak">Access key ID</Label>
+                  <Input
+                    id="aws-ak"
+                    value={connectAccessKeyId}
+                    onChange={(e) => setConnectAccessKeyId(e.target.value)}
+                    autoComplete="off"
+                    className="rounded-xl font-mono text-xs"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="aws-region-conn">Default region</Label>
+                  <Input
+                    id="aws-region-conn"
+                    value={connectRegion}
+                    onChange={(e) => setConnectRegion(e.target.value)}
+                    placeholder="us-east-1"
+                    className="rounded-xl font-mono text-xs"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="aws-sk">Secret access key</Label>
+                <Input
+                  id="aws-sk"
+                  type="password"
+                  value={connectSecretKey}
+                  onChange={(e) => setConnectSecretKey(e.target.value)}
+                  autoComplete="off"
+                  className="rounded-xl font-mono text-xs"
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="aws-st">Session token (optional)</Label>
+                  <Input
+                    id="aws-st"
+                    value={connectSessionToken}
+                    onChange={(e) => setConnectSessionToken(e.target.value)}
+                    className="rounded-xl font-mono text-xs"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="aws-sg">SSH / game CIDR (optional)</Label>
+                  <Input
+                    id="aws-sg"
+                    value={connectSgCidr}
+                    onChange={(e) => setConnectSgCidr(e.target.value)}
+                    placeholder="0.0.0.0/0"
+                    className="rounded-xl font-mono text-xs"
+                  />
+                </div>
+              </div>
+              <Button
+                type="button"
+                className="rounded-xl"
+                disabled={savingCreds}
+                onClick={() => void saveAwsCredentials()}
+              >
+                {savingCreds ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+                    Saving…
+                  </>
+                ) : (
+                  "Save & enable EC2"
+                )}
+              </Button>
+            </>
+          )}
+          {opts?.error ? <p className="text-sm text-destructive">{opts.error}</p> : null}
         </CardContent>
-        {opts?.error ? (
-          <CardContent className="text-sm text-destructive">{opts.error}</CardContent>
-        ) : null}
       </Card>
     );
   }
@@ -215,12 +368,47 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
           New EC2 (Amazon API)
         </CardTitle>
         <CardDescription>
-          Launches Ubuntu 22.04 in your default VPC, opens SSH + UDP 2001/17777 (CIDR from env), cloud-init
-          creates <code className="text-xs">/home/ubuntu/arma-reforger</code>. You pay AWS. SSH user{" "}
-          <strong>ubuntu</strong>.
+          Launches Ubuntu 22.04 in your default VPC, opens SSH + UDP 2001/17777 (CIDR from your saved
+          settings or env), cloud-init creates <code className="text-xs">/home/ubuntu/arma-reforger</code>.
+          SSH user <strong>ubuntu</strong>.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
+        {awsSettings ? (
+          <div className="space-y-2 rounded-xl border border-border/80 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            <p>
+              <span className="font-medium text-foreground">AWS credentials:</span>{" "}
+              {awsSettings.source === "env" ? (
+                <>environment variables on this host</>
+              ) : (
+                <>
+                  saved on this server (
+                  <code className="text-[11px]">data/aws-credentials.json</code>)
+                </>
+              )}
+              {awsSettings.maskedAccessKeyId ? (
+                <>
+                  {" "}
+                  · access key <span className="font-mono">{awsSettings.maskedAccessKeyId}</span>
+                </>
+              ) : null}
+            </p>
+            {awsSettings.source === "file" ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-lg text-xs"
+                onClick={() => void removeAwsCredentialsFile()}
+              >
+                Remove saved credentials
+              </Button>
+            ) : null}
+            {awsSettings.envOverrides ? (
+              <p className="text-amber-700 dark:text-amber-300">{awsSettings.envOverrides}</p>
+            ) : null}
+          </div>
+        ) : null}
         {opts.error ? (
           <p className="text-sm text-amber-600 dark:text-amber-400">{opts.error}</p>
         ) : null}
