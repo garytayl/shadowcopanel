@@ -185,11 +185,39 @@ export function DigitalOceanProvisionCard({ onProvisioned }: Props) {
             New VPS (DigitalOcean)
           </CardTitle>
           <CardDescription>
-            Create a Droplet from this app (no AWS). Add{" "}
-            <code className="text-xs">DIGITALOCEAN_TOKEN</code> to the environment that runs this Next.js
-            app. Create a token under API → Tokens in DigitalOcean. Billing is with DigitalOcean.
+            This block is not on DigitalOcean’s website—it unlocks here after you wire the token into this
+            app.
           </CardDescription>
         </CardHeader>
+        <CardContent className="space-y-3 text-sm leading-relaxed text-muted-foreground">
+          <ol className="list-inside list-decimal space-y-2">
+            <li>
+              On DigitalOcean: open the left sidebar item <strong className="text-foreground">API</strong>{" "}
+              (same list as Droplets / Settings), or go directly to{" "}
+              <a
+                href="https://cloud.digitalocean.com/account/api/tokens"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline underline-offset-2"
+              >
+                cloud.digitalocean.com/account/api/tokens
+              </a>
+              . Click <strong className="text-foreground">Generate New Token</strong>, give it a name, keep
+              Write access, copy the token once.
+            </li>
+            <li>
+              On the machine that runs this control panel: add{" "}
+              <code className="text-xs text-foreground">DIGITALOCEAN_TOKEN=</code>… to{" "}
+              <code className="text-xs text-foreground">.env.local</code> (dev) or your host’s env (e.g.
+              Vercel), then restart / redeploy.
+            </li>
+            <li>Reload this page — the full DigitalOcean form appears above.</li>
+          </ol>
+          <p className="text-xs">
+            Billing is always with DigitalOcean. If you see “Add a payment method,” finish that first
+            before creating droplets.
+          </p>
+        </CardContent>
         {opts?.error ? (
           <CardContent className="text-sm text-destructive">{opts.error}</CardContent>
         ) : null}
