@@ -22,14 +22,14 @@ export function ActiveServerBar({ server }: { server: ActiveServerPanelContext }
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-amber-950 dark:text-amber-100">No server connected</p>
             <p className="mt-0.5 text-amber-900/85 dark:text-amber-200/90">
-              Dashboard, Mods, and Marketplace use the active server from{" "}
+              Add any machine that runs Reforger (home PC, rented server, or cloud). Go to{" "}
               <Link
                 href="/servers"
                 className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
               >
                 Server setup
-              </Link>
-              .
+              </Link>{" "}
+              — you don&apos;t need AWS.
             </p>
           </div>
         </div>

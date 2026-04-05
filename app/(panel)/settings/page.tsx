@@ -30,10 +30,10 @@ export default async function SettingsPage() {
       >
         <InPlainEnglish title="Why this looks technical">
           <p>
-            Behind the scenes the app uses a <strong>secure login file</strong> (a “key”) to talk to your
-            rented machine. You normally set this once in your hosting provider’s dashboard (e.g. Vercel
-            environment variables) or in a local settings file—<strong>not</strong> inside the game. If
-            something here is blank, the app can’t reach your server yet.
+            Behind the scenes the app uses a <strong>secure login file</strong> (a “key”) to reach the machine where
+            Reforger runs—same idea as SSH for any game server. Whoever runs this website sets keys once (e.g. in the
+            host&apos;s settings or a local file)—<strong>not</strong> inside the game. Friends don&apos;t need to see
+            this page to play. If something here is blank, the app can&apos;t reach your server yet.
           </p>
         </InPlainEnglish>
       </PageHeader>

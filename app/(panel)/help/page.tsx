@@ -11,6 +11,14 @@ import {
 
 const faqs = [
   {
+    q: "Do I need AWS or Amazon?",
+    a: "No. You only need a computer or rented game server running the Reforger dedicated server, with SSH access (IP + key). AWS is an optional shortcut if whoever hosts this panel has set it up—most groups use a home PC, a small VPS, or any host their community already pays for.",
+  },
+  {
+    q: "How do I play with friends?",
+    a: "Someone runs the dedicated server on a machine that stays online. They add that machine here under Server setup, then start the server from Home. Friends join using the server browser in Reforger once ports and publicAddress are correct—this panel helps fix that from the browser when SSH works.",
+  },
+  {
     q: "What is this website?",
     a: "A control panel that talks to your Arma Reforger server over SSH. You can start and stop the game, read logs, and adjust config without logging into a terminal by hand.",
   },
@@ -41,9 +49,13 @@ export default function HelpPage() {
       >
         <InPlainEnglish>
           <p>
-            If something fails, check <strong>Connection details</strong> first, then <strong>Diagnostics</strong>{" "}
-            for SSH errors. <Link className="underline underline-offset-2" href="/dashboard">Home</Link> shows
-            whether the link to your server works.
+            Start on <Link className="underline underline-offset-2" href="/servers">Server setup</Link> with your
+            game host&apos;s IP and key—you don&apos;t need a cloud account. If something fails, check{" "}
+            <strong>Connection details</strong>, then <strong>Diagnostics</strong> for SSH errors.{" "}
+            <Link className="underline underline-offset-2" href="/dashboard">
+              Home
+            </Link>{" "}
+            shows whether the panel can reach your server.
           </p>
         </InPlainEnglish>
       </PageHeader>

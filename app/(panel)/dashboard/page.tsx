@@ -10,7 +10,7 @@ export default function DashboardPage() {
         title="Dashboard"
         description={
           <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span>Live status and controls.</span>
+            <span>Your private server at a glance—start, mods, and logs for friends.</span>
             <Link href="/help" className="text-primary underline-offset-4 hover:underline">
               Help
             </Link>

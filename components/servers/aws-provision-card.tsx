@@ -356,10 +356,10 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
         <div className="text-center">
           <p className="flex items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
             <ServerCog className="size-3.5 opacity-80" aria-hidden />
-            New cloud server
+            Amazon EC2 (hosting account)
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Tap the control when your host has enabled AWS — players don’t paste access keys here.
+            One-click only if the team running this panel turned on AWS. Friends never paste cloud keys here.
           </p>
         </div>
 
@@ -378,7 +378,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
                 ? "Tap to open deployer instructions in the log"
                 : busy
                   ? "Provisioning…"
-                  : "Create new server on AWS"
+                  : "Create EC2 instance (AWS)"
             }
             actionLabel={
               !opts?.enabled

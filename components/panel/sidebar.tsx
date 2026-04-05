@@ -147,7 +147,7 @@ export function Sidebar({ activeServer }: { activeServer: ActiveServerPanelConte
         <NavList />
         <div className="px-4 py-3 text-[10px] leading-snug text-muted-foreground">
           <span className="block uppercase tracking-wider">v0.3</span>
-          <span className="mt-1 block normal-case">Cloud server control</span>
+          <span className="mt-1 block normal-case">Private server for friends</span>
         </div>
       </aside>
 

@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     template: "%s · Reforger Control",
   },
   description:
-    "Control your Arma Reforger dedicated server from the web—start, stop, config, and logs without using the cloud console.",
+    "Run a private Arma Reforger server for friends from the browser—any PC or game host you can SSH into. No AWS required.",
 };
 
 /** Mobile: correct scale, notched screens, allow pinch-zoom for accessibility */

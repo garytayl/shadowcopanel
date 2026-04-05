@@ -31,9 +31,9 @@ export function JoinRepairBanner({
         <p>
           Sync your public IP into <code className="font-mono text-[11px] text-foreground">config.json</code>, apply
           safe network defaults, reset the session, and start the game server — no SSH required. If UDP ports stay
-          closed, also allow <strong className="text-foreground">UDP {2001}</strong> (and often{" "}
-          <strong className="text-foreground">17777</strong>) in your cloud security group; this app cannot change AWS
-          rules.
+          closed, whoever runs the machine must open <strong className="text-foreground">UDP {2001}</strong> (and often{" "}
+          <strong className="text-foreground">17777</strong>) in the firewall or router—this panel can&apos;t change
+          that for you.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button

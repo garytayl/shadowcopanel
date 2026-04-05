@@ -244,18 +244,10 @@ export function ServersClient() {
 
   return (
     <div className="space-y-6">
-      <AwsProvisionCard
-        onProvisioned={async (result: AwsProvisionCompleteResult | undefined) => {
-          await new Promise((r) => setTimeout(r, 0));
-          await load({ ensureProfile: result?.profile ?? null });
-          dispatchActiveServerChanged();
-          router.refresh();
-        }}
-      />
-
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Saved servers are remembered on this host. Keys are not sent to browsers.
+          Most people: paste your server&apos;s IP and SSH key here. Saved on this app&apos;s host only—never sent to
+          players&apos; browsers.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -289,7 +281,9 @@ export function ServersClient() {
           <CardHeader>
             <CardTitle className="text-base">No saved servers yet</CardTitle>
             <CardDescription>
-              Add the IP or hostname and SSH key for your game server, then choose <strong>Use this server</strong>.
+              Use <strong>Add server</strong> with the IP (or hostname) and PEM key for the PC or host running Reforger,
+              then <strong>Use this server</strong>. Same flow for a spare computer at home or any game rental—no AWS
+              account needed.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -365,6 +359,25 @@ export function ServersClient() {
           ))}
         </ul>
       )}
+
+      <section className="space-y-3 border-t border-border/60 pt-8">
+        <div className="space-y-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Optional</p>
+          <h2 className="text-base font-semibold text-foreground">Create a server on AWS</h2>
+          <p className="text-sm text-muted-foreground">
+            Only if whoever hosts this panel has linked an Amazon account. Skip this if you already have a machine or a
+            non-AWS host.
+          </p>
+        </div>
+        <AwsProvisionCard
+          onProvisioned={async (result: AwsProvisionCompleteResult | undefined) => {
+            await new Promise((r) => setTimeout(r, 0));
+            await load({ ensureProfile: result?.profile ?? null });
+            dispatchActiveServerChanged();
+            router.refresh();
+          }}
+        />
+      </section>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-h-[min(90vh,720px)] overflow-y-auto sm:max-w-lg">
