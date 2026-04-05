@@ -72,6 +72,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MarketplaceCatalogSkeleton } from "@/components/marketplace/marketplace-catalog-skeleton";
 import { ModDetailDialog } from "@/components/marketplace/mod-detail-dialog";
+import { useOnActiveServerChanged } from "@/lib/client/active-server-events";
 import { MarketplaceStack } from "@/components/marketplace/marketplace-stack";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -210,6 +211,8 @@ export function MarketplaceClient() {
     setEnrichedValidation(null);
     setRemoteRawConfig(r.data.rawConfig);
   }, []);
+
+  useOnActiveServerChanged(loadStack);
 
   useEffect(() => {
     void loadStack();

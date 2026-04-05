@@ -72,6 +72,7 @@ import {
   readControlLinkHistory,
   recordControlLinkSample,
 } from "@/components/dashboard/latency-sparkline";
+import { useOnActiveServerChanged } from "@/lib/client/active-server-events";
 import { PowerOrb, type PowerOrbPhase } from "@/components/dashboard/power-orb";
 import { parseDfRootLine, parseFreeMemM, parseLoad1m } from "@/lib/utils/dashboard-metrics";
 import {
@@ -267,6 +268,8 @@ export function DashboardClient() {
       setModStackValidation(null);
     }
   }, []);
+
+  useOnActiveServerChanged(refresh);
 
   useEffect(() => {
     const t = window.setTimeout(() => void refresh(), 0);

@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Activity, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
+import { useOnActiveServerChanged } from "@/lib/client/active-server-events";
 import { Hint } from "@/components/dashboard/hint";
 import { LogAnalysisCard } from "@/components/panel/log-analysis-card";
 import { fetchDiagnosticsAction } from "@/lib/actions/diagnostics";
@@ -33,6 +34,8 @@ export function DiagnosticsClient() {
       toast.error(r.error);
     }
   }, []);
+
+  useOnActiveServerChanged(refresh);
 
   useEffect(() => {
     const t = window.setTimeout(() => void refresh(), 0);

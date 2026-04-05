@@ -3,8 +3,15 @@ import { Tooltip } from "@base-ui/react/tooltip";
 import { AppFooter } from "@/components/panel/app-footer";
 import { GlobalAppChrome } from "@/components/panel/global-app-chrome";
 import { Sidebar } from "@/components/panel/sidebar";
+import type { ActiveServerPanelContext } from "@/lib/types/active-server";
 
-export function PanelShell({ children }: { children: React.ReactNode }) {
+export function PanelShell({
+  children,
+  activeServer,
+}: {
+  children: React.ReactNode;
+  activeServer: ActiveServerPanelContext;
+}) {
   return (
     <Tooltip.Provider delay={160} closeDelay={40} timeout={300}>
     <div className="relative flex min-h-dvh flex-col overflow-x-hidden bg-background lg:flex-row">
@@ -19,7 +26,7 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
         <div className="app-noise absolute inset-0 hidden md:block" />
       </div>
       <GlobalAppChrome />
-      <Sidebar />
+      <Sidebar activeServer={activeServer} />
       <div className="relative flex min-h-0 flex-1 flex-col">
         <a
           href="#main-content"

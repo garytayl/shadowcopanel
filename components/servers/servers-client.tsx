@@ -1,8 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2, Plus, Server, Trash2, Pencil, PlugZap } from "lucide-react";
 import { toast } from "sonner";
+
+import { dispatchActiveServerChanged } from "@/lib/client/active-server-events";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -48,6 +51,7 @@ const defaultForm = {
 };
 
 export function ServersClient() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<ServerProfilePublic[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
@@ -114,6 +118,8 @@ export function ServersClient() {
         id ? "This server is now active for the panel." : "Using the default connection from host settings.",
       );
       await load();
+      dispatchActiveServerChanged();
+      router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to activate");
     }
@@ -216,7 +222,13 @@ export function ServersClient() {
 
   return (
     <div className="space-y-6">
-      <AwsProvisionCard onProvisioned={() => void load()} />
+      <AwsProvisionCard
+        onProvisioned={() => {
+          void load();
+          dispatchActiveServerChanged();
+          router.refresh();
+        }}
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">

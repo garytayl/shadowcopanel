@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { ActiveServerBar } from "@/components/panel/active-server-bar";
+import type { ActiveServerPanelContext } from "@/lib/types/active-server";
 import { ThemeToggle } from "@/components/panel/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -124,7 +126,7 @@ function NavList({
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ activeServer }: { activeServer: ActiveServerPanelContext }) {
   return (
     <>
       <aside className="hidden w-56 shrink-0 border-r border-primary/15 bg-sidebar/90 shadow-[4px_0_32px_-8px_rgba(0,0,0,0.45)] backdrop-blur-xl supports-[backdrop-filter]:bg-sidebar/75 lg:block">
@@ -138,6 +140,9 @@ export function Sidebar() {
             Reforger Control
           </motion.div>
           <ThemeToggle />
+        </div>
+        <div className="border-b border-border/40 px-3 py-3">
+          <ActiveServerBar server={activeServer} />
         </div>
         <NavList />
         <div className="px-4 py-3 text-[10px] leading-snug text-muted-foreground">
@@ -154,6 +159,9 @@ export function Sidebar() {
           </span>
         </div>
         <ThemeToggle />
+      </div>
+      <div className="border-b border-border/50 bg-background/70 px-3 py-2 backdrop-blur-md safe-area-x lg:hidden">
+        <ActiveServerBar server={activeServer} />
       </div>
     </>
   );

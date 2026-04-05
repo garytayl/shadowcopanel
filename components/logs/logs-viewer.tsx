@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Download, Filter, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
+import { useOnActiveServerChanged } from "@/lib/client/active-server-events";
 import { Hint } from "@/components/dashboard/hint";
 import { LogAnalysisCard } from "@/components/panel/log-analysis-card";
 import { fetchLogsAction, type LogHealthSummary } from "@/lib/actions/logs";
@@ -50,6 +51,8 @@ export function LogsViewer() {
     setHealth(r.data.health);
     setAnalysis(r.data.analysis);
   }, []);
+
+  useOnActiveServerChanged(refresh);
 
   useEffect(() => {
     const t = window.setTimeout(() => {

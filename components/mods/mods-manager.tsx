@@ -29,6 +29,7 @@ import {
   validateModStack,
   type ModStackValidationResult,
 } from "@/lib/reforger/mod-stack-analysis";
+import { useOnActiveServerChanged } from "@/lib/client/active-server-events";
 import { Hint } from "@/components/dashboard/hint";
 import { ConfigAnomalyBanner } from "@/components/panel/config-anomaly-banner";
 import { ConfigDiffDialog } from "@/components/panel/config-diff-dialog";
@@ -109,6 +110,8 @@ export function ModsManager() {
   }, [rows, maxPlayers]);
 
   const displayValidation = enrichedValidation ?? liveValidation;
+
+  useOnActiveServerChanged(load);
 
   useEffect(() => {
     const t = window.setTimeout(() => {

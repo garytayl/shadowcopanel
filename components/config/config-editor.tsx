@@ -18,6 +18,7 @@ import {
   previewRawSaveDiff,
   type ConfigDiffResult,
 } from "@/lib/reforger/config-diff";
+import { useOnActiveServerChanged } from "@/lib/client/active-server-events";
 import { Hint } from "@/components/dashboard/hint";
 import { ConfigAnomalyBanner } from "@/components/panel/config-anomaly-banner";
 import { ConfigDiffDialog } from "@/components/panel/config-diff-dialog";
@@ -104,6 +105,9 @@ export function ConfigEditor() {
       toast.success("Loaded remote config");
     }
   }, []);
+
+  const reloadSilent = useCallback(() => void load({ silent: true }), [load]);
+  useOnActiveServerChanged(reloadSilent);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => {

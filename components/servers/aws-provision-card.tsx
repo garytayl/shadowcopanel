@@ -286,6 +286,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
 
       const fin = await fetch("/api/provision/aws/complete", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
           useManualKeys

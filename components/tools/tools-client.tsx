@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
+import { useOnActiveServerChanged } from "@/lib/client/active-server-events";
 import { Loader2, Network, HardDrive, Activity, Radio, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 
@@ -69,6 +71,11 @@ export function ToolsClient() {
       /* ignore */
     }
   }, []);
+
+  useOnActiveServerChanged(() => {
+    setOutput("");
+    setRunning(null);
+  });
 
   async function runSafeRestart() {
     setSafeRestartLoading(true);

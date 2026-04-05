@@ -13,8 +13,10 @@ export default function ServersPage() {
       >
         <InPlainEnglish title="How it works">
           <p>
-            Choose which machine the panel controls, then use Dashboard and Config as usual. Connection
-            details are stored on the server that runs this app—not in visitors&apos; browsers.
+            The <strong className="text-foreground">active server</strong> in the sidebar applies everywhere:
+            Home, Config, Mods, Marketplace, Logs, and tools all use that SSH connection. Switch servers here
+            and the whole site retargets. Connection details are stored on the host that runs this app—not in
+            visitors&apos; browsers.
           </p>
         </InPlainEnglish>
       </PageHeader>
