@@ -17,7 +17,9 @@ export type PowerOrbPhase =
   /** Server setup — create EC2 (idle, clickable). */
   | "provision_ready"
   /** Server setup — provisioning in progress. */
-  | "provision_busy";
+  | "provision_busy"
+  /** Server setup — AWS not configured on host (operator must set env). */
+  | "provision_blocked";
 
 const LABEL: Record<PowerOrbPhase, string> = {
   loading: "Syncing…",
@@ -30,6 +32,7 @@ const LABEL: Record<PowerOrbPhase, string> = {
   unknown: "Unknown",
   provision_ready: "Ready",
   provision_busy: "Creating…",
+  provision_blocked: "Not configured",
 };
 
 const SIZE = {
@@ -44,6 +47,7 @@ export function PowerOrb({
   disabled = false,
   title: titleProp,
   actionLabel,
+  phaseSubtitle,
   size = "default",
 }: {
   phase: PowerOrbPhase;
@@ -55,6 +59,7 @@ export function PowerOrb({
   title?: string;
   /** Shown under the orb (e.g. “Start server”) — switch-style affordance. */
   actionLabel?: string;
+  phaseSubtitle?: string | null;
   /** `hero`: larger control for dashboard hero. */
   size?: keyof typeof SIZE;
 }) {
@@ -72,7 +77,9 @@ export function PowerOrb({
         ? "shadow-[0_0_40px_-10px_rgba(245,158,11,0.35)]"
         : phase === "provision_ready"
           ? "shadow-[0_0_40px_-12px_color-mix(in_oklch,var(--primary)_45%,transparent)] ring-1 ring-primary/20"
-          : "shadow-lg shadow-black/20";
+          : phase === "provision_blocked"
+            ? "shadow-lg shadow-amber-950/20 ring-1 ring-amber-500/15"
+            : "shadow-lg shadow-black/20";
 
   return (
     <div className={cn("flex flex-col items-center gap-3", className)}>
@@ -114,7 +121,8 @@ export function PowerOrb({
             phase === "degraded" && "bg-gradient-to-br from-amber-500/25 via-amber-500/5 to-transparent",
             phase === "provision_ready" &&
               "bg-gradient-to-br from-primary/20 via-primary/5 to-transparent",
-            (phase === "stopped" || phase === "unknown") && "bg-muted/40",
+            (phase === "stopped" || phase === "unknown" || phase === "provision_blocked") &&
+              "bg-muted/40",
             busy && "bg-primary/10",
           )}
         />
@@ -134,6 +142,7 @@ export function PowerOrb({
                 phase === "running" && "text-emerald-400",
                 phase === "degraded" && "text-amber-400",
                 phase === "provision_ready" && "text-sky-400",
+                phase === "provision_blocked" && "text-amber-500/90",
                 (phase === "stopped" || phase === "unknown") && "text-muted-foreground",
               )}
               strokeWidth={2}
@@ -147,7 +156,18 @@ export function PowerOrb({
           {actionLabel ?? LABEL[phase]}
         </p>
         {actionLabel ? (
-          <p className="mt-0.5 text-[10px] text-muted-foreground/80">{LABEL[phase]}</p>
+          (() => {
+            const sub =
+              phaseSubtitle !== undefined
+                ? phaseSubtitle
+                : phase === "unknown"
+                  ? null
+                  : LABEL[phase];
+            if (sub === null || sub === "") return null;
+            return (
+              <p className="mt-0.5 text-[10px] text-muted-foreground/80">{sub}</p>
+            );
+          })()
         ) : null}
       </div>
     </div>

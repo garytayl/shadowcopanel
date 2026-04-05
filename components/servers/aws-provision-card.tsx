@@ -68,7 +68,8 @@ function ActivityLog({
       <ScrollArea className="h-[min(280px,42vh)] w-full">
         {empty ? (
           <p className="px-3 py-4 text-sm text-muted-foreground">
-            No output yet. Use the power control above to create a server — errors and steps appear here.
+            No output yet. Tap the control — if cloud create isn’t configured, the log will list the{" "}
+            <code className="font-mono text-[11px]">AWS_*</code> env vars your deployer should set on the host.
           </p>
         ) : (
           <pre
@@ -211,7 +212,9 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
         el.open = true;
         el.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
-      pushLog("Add AWS keys first (expand “AWS keys” below), or set keys on the host.");
+      pushLog(
+        "[Deployer] Add AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_REGION to the host environment (e.g. Vercel → Settings → Environment Variables). For one-click launch, also set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN. See .env.example.",
+      );
       return;
     }
     const pk = publicKey.trim();
@@ -323,7 +326,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
   if (loadingOpts) orbPhase = "loading";
   else if (busy) orbPhase = "provision_busy";
   else if (opts?.enabled) orbPhase = "provision_ready";
-  else orbPhase = "unknown";
+  else orbPhase = "provision_blocked";
 
   const hero = (
     <section
@@ -342,7 +345,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
             New cloud server
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Same power control as Home — tap to provision EC2 (SSH keys generated on the server).
+            Tap the control when your host has enabled AWS — players don’t paste access keys here.
           </p>
         </div>
 
@@ -358,28 +361,50 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
             disabled={busy}
             title={
               !opts?.enabled
-                ? "Configure AWS first — tap to show keys"
+                ? "Tap to open deployer instructions in the log"
                 : busy
                   ? "Provisioning…"
                   : "Create new server on AWS"
             }
             actionLabel={
               !opts?.enabled
-                ? "Needs AWS keys"
+                ? "Unavailable"
                 : busy
                   ? "Working…"
                   : "Create server"
             }
+            phaseSubtitle={!opts?.enabled ? null : undefined}
             onClick={() => void runProvision()}
           />
         )}
 
         {!loadingOpts && !opts?.enabled ? (
-          <p className="max-w-md text-center text-sm text-muted-foreground">
-            Set{" "}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">AWS_*</code> on the host or
-            expand <strong className="text-foreground">AWS keys</strong> below.
-          </p>
+          <div className="w-full max-w-xl space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-4 py-3 text-left text-sm">
+            <p className="font-medium text-foreground">Deployer / hosting account</p>
+            <p className="text-muted-foreground">
+              Cloud create is off until <strong className="text-foreground">you</strong> set AWS credentials on
+              the server that runs this app — not in the browser.
+            </p>
+            <p className="text-[13px] text-muted-foreground">
+              In Vercel (or your host): add these environment variables:
+            </p>
+            <ul className="list-inside list-disc space-y-1 font-mono text-[11px] text-foreground/90">
+              <li>AWS_ACCESS_KEY_ID</li>
+              <li>AWS_SECRET_ACCESS_KEY</li>
+              <li>AWS_REGION (e.g. us-east-1)</li>
+            </ul>
+            <p className="text-[13px] text-muted-foreground">
+              For automatic SSH between steps on Vercel, also set:
+            </p>
+            <ul className="list-inside list-disc space-y-1 font-mono text-[11px] text-foreground/90">
+              <li>UPSTASH_REDIS_REST_URL</li>
+              <li>UPSTASH_REDIS_REST_TOKEN</li>
+            </ul>
+            <p className="text-xs text-muted-foreground">
+              Optional fallback (not recommended vs env): expand <strong className="text-foreground">Paste keys</strong>{" "}
+              below — only if you cannot use env vars.
+            </p>
+          </div>
         ) : null}
 
         {awsSettings?.envOverrides ? (
@@ -388,13 +413,16 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
           </p>
         ) : null}
 
-        {/* Operator: AWS API keys */}
         {!loadingOpts && opts && !opts.enabled ? (
           <details ref={awsKeysDetailsRef} className="w-full max-w-lg rounded-xl border border-border/60 bg-muted/10">
             <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium">
-              AWS keys (operator)
+              Paste keys (fallback — prefer env vars above)
             </summary>
             <div className="space-y-3 border-t border-border/60 px-4 pb-4 pt-3">
+              <p className="text-xs text-muted-foreground">
+                Prefer setting <code className="font-mono">AWS_*</code> on the host. Use this only when env vars
+                aren’t possible.
+              </p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="grid gap-1.5">
                   <Label htmlFor="aws-ak">Access key ID</Label>
