@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { isAwsEc2ProvisionEnabledAsync } from "@/lib/provision/aws-env";
 import { describeInstance } from "@/lib/provision/aws-ec2";
+import { takeLaunchPrivateKey } from "@/lib/provision/provision-launch-keys";
 import { ACTIVE_PROFILE_COOKIE } from "@/lib/server-profiles/resolve";
 import { upsertProfile } from "@/lib/server-profiles/store";
 import type { ServerProfile } from "@/lib/server-profiles/types";
@@ -37,6 +38,8 @@ export async function POST(req: Request) {
     awsRegion?: string;
     profileName?: string;
     privateKey?: string;
+    /** When true, use the server-stored key from one-click launch (Redis / memory). */
+    useStoredKey?: boolean;
     activate?: boolean;
     checkPort?: number | null;
   };
@@ -56,10 +59,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "awsRegion required" }, { status: 400 });
   }
 
-  const privateKey = String(body.privateKey ?? "").trim();
+  let privateKey = String(body.privateKey ?? "").trim();
+  if (!privateKey && body.useStoredKey === true) {
+    const stored = await takeLaunchPrivateKey(instanceId);
+    if (stored) privateKey = stored;
+  }
+
   if (!validatePrivateKey(privateKey)) {
     return NextResponse.json(
-      { error: "privateKey must be a PEM / OpenSSH private key block." },
+      {
+        error:
+          "Missing private key. Use one-click launch, or paste a PEM private key in the request.",
+      },
       { status: 400 },
     );
   }

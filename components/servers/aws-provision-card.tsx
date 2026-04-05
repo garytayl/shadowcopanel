@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -92,6 +93,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
   const [label, setLabel] = useState("reforger");
   const [region, setRegion] = useState("");
   const [instanceType, setInstanceType] = useState("");
+  const [useManualKeys, setUseManualKeys] = useState(false);
   const [publicKey, setPublicKey] = useState("");
   const [privateKey, setPrivateKey] = useState("");
   const [checkPort, setCheckPort] = useState("2001");
@@ -201,36 +203,40 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
     if (!opts?.enabled) return;
     const pk = publicKey.trim();
     const priv = privateKey.trim();
-    if (!pk.startsWith("ssh-")) {
-      pushLog("Public key must start with ssh-ed25519 or ssh-rsa.");
-      return;
-    }
-    if (!priv.includes("BEGIN") || !priv.includes("PRIVATE KEY")) {
-      pushLog("Private key must be a PEM block.");
-      return;
-    }
+
     if (!region || !instanceType) {
       pushLog("Pick a region and size.");
       return;
     }
 
+    if (useManualKeys) {
+      if (!pk.startsWith("ssh-")) {
+        pushLog("Public key must start with ssh-ed25519 or ssh-rsa.");
+        return;
+      }
+      if (!priv.includes("BEGIN") || !priv.includes("PRIVATE KEY")) {
+        pushLog("Private key must be a PEM block.");
+        return;
+      }
+    }
+
     setBusy(true);
-    pushLog("Starting…");
+    pushLog(useManualKeys ? "Starting (your keys)…" : "Starting (automatic SSH keys)…");
     try {
       const create = await fetch("/api/provision/aws", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          label,
-          region,
-          instanceType,
-          publicKey: pk,
-        }),
+        body: JSON.stringify(
+          useManualKeys
+            ? { label, region, instanceType, publicKey: pk }
+            : { label, region, instanceType, autoGenerateKeys: true },
+        ),
       });
       const cj = (await create.json()) as {
         error?: string;
         awsInstanceId?: string;
         awsRegion?: string;
+        usedAutoKeys?: boolean;
       };
       if (!create.ok) throw new Error(cj.error ?? "Create failed");
       const instanceId = cj.awsInstanceId;
@@ -266,14 +272,25 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
       const fin = await fetch("/api/provision/aws/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          awsInstanceId: instanceId,
-          awsRegion,
-          profileName: label.trim() || "Game server",
-          privateKey: priv,
-          activate: true,
-          checkPort: checkPort.trim() ? Number(checkPort) : null,
-        }),
+        body: JSON.stringify(
+          useManualKeys
+            ? {
+                awsInstanceId: instanceId,
+                awsRegion,
+                profileName: label.trim() || "Game server",
+                privateKey: priv,
+                activate: true,
+                checkPort: checkPort.trim() ? Number(checkPort) : null,
+              }
+            : {
+                awsInstanceId: instanceId,
+                awsRegion,
+                profileName: label.trim() || "Game server",
+                useStoredKey: true,
+                activate: true,
+                checkPort: checkPort.trim() ? Number(checkPort) : null,
+              },
+        ),
       });
       const fj = (await fin.json()) as { error?: string; ok?: boolean; host?: string };
       if (!fin.ok) throw new Error(fj.error ?? "Finalize failed");
@@ -312,95 +329,98 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {credentialsLockedByEnv
+              ? "AWS keys are set on the host. Open this section only if you need to change them."
+              : "The host needs AWS API access once (environment variables or paste below)."}
+          </p>
           {awsSettings?.envOverrides ? (
             <p className="rounded-lg border border-amber-500/35 bg-amber-500/[0.07] px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
               {awsSettings.envOverrides}
             </p>
           ) : null}
 
-          {credentialsLockedByEnv ? (
-            <p className="text-sm text-muted-foreground">
-              Cloud keys are set in the host environment. Launch works; remove env keys to paste here
-              instead.
-            </p>
-          ) : (
-            <>
-              <div className="grid gap-3 sm:grid-cols-2">
+          {!credentialsLockedByEnv ? (
+            <details className="rounded-xl border border-border/60 bg-muted/15">
+              <summary className="cursor-pointer select-none px-3 py-2.5 text-sm font-medium text-foreground">
+                AWS keys (operator)
+              </summary>
+              <div className="space-y-3 border-t border-border/60 px-3 pb-3 pt-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="aws-ak">Access key ID</Label>
+                    <Input
+                      id="aws-ak"
+                      value={connectAccessKeyId}
+                      onChange={(e) => setConnectAccessKeyId(e.target.value)}
+                      autoComplete="off"
+                      className="rounded-xl font-mono text-xs"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="aws-region-conn">Region</Label>
+                    <Input
+                      id="aws-region-conn"
+                      value={connectRegion}
+                      onChange={(e) => setConnectRegion(e.target.value)}
+                      placeholder="us-east-1"
+                      className="rounded-xl font-mono text-xs"
+                    />
+                  </div>
+                </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="aws-ak">Access key ID</Label>
+                  <Label htmlFor="aws-sk">Secret access key</Label>
                   <Input
-                    id="aws-ak"
-                    value={connectAccessKeyId}
-                    onChange={(e) => setConnectAccessKeyId(e.target.value)}
+                    id="aws-sk"
+                    type="password"
+                    value={connectSecretKey}
+                    onChange={(e) => setConnectSecretKey(e.target.value)}
                     autoComplete="off"
                     className="rounded-xl font-mono text-xs"
                   />
                 </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="aws-region-conn">Region</Label>
-                  <Input
-                    id="aws-region-conn"
-                    value={connectRegion}
-                    onChange={(e) => setConnectRegion(e.target.value)}
-                    placeholder="us-east-1"
-                    className="rounded-xl font-mono text-xs"
-                  />
-                </div>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="aws-sk">Secret access key</Label>
-                <Input
-                  id="aws-sk"
-                  type="password"
-                  value={connectSecretKey}
-                  onChange={(e) => setConnectSecretKey(e.target.value)}
-                  autoComplete="off"
-                  className="rounded-xl font-mono text-xs"
-                />
-              </div>
-              <details className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-sm">
-                <summary className="cursor-pointer select-none text-muted-foreground">
-                  Advanced
-                </summary>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="aws-st">Session token</Label>
-                    <Input
-                      id="aws-st"
-                      value={connectSessionToken}
-                      onChange={(e) => setConnectSessionToken(e.target.value)}
-                      className="rounded-xl font-mono text-xs"
-                    />
+                <details className="text-sm">
+                  <summary className="cursor-pointer text-muted-foreground">More options</summary>
+                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="aws-st">Session token</Label>
+                      <Input
+                        id="aws-st"
+                        value={connectSessionToken}
+                        onChange={(e) => setConnectSessionToken(e.target.value)}
+                        className="rounded-xl font-mono text-xs"
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="aws-sg">Ingress CIDR</Label>
+                      <Input
+                        id="aws-sg"
+                        value={connectSgCidr}
+                        onChange={(e) => setConnectSgCidr(e.target.value)}
+                        placeholder="0.0.0.0/0"
+                        className="rounded-xl font-mono text-xs"
+                      />
+                    </div>
                   </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="aws-sg">Ingress CIDR</Label>
-                    <Input
-                      id="aws-sg"
-                      value={connectSgCidr}
-                      onChange={(e) => setConnectSgCidr(e.target.value)}
-                      placeholder="0.0.0.0/0"
-                      className="rounded-xl font-mono text-xs"
-                    />
-                  </div>
-                </div>
-              </details>
-              <Button
-                type="button"
-                className="w-full rounded-xl"
-                disabled={savingCreds}
-                onClick={() => void saveAwsCredentials()}
-              >
-                {savingCreds ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
-                    Saving…
-                  </>
-                ) : (
-                  "Save keys"
-                )}
-              </Button>
-            </>
-          )}
+                </details>
+                <Button
+                  type="button"
+                  className="w-full rounded-xl"
+                  disabled={savingCreds}
+                  onClick={() => void saveAwsCredentials()}
+                >
+                  {savingCreds ? (
+                    <>
+                      <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+                      Saving…
+                    </>
+                  ) : (
+                    "Save"
+                  )}
+                </Button>
+              </div>
+            </details>
+          ) : null}
           {opts?.error ? <p className="text-sm text-destructive">{opts.error}</p> : null}
           <ErrorLog lines={logs} onClear={clearLogs} />
         </CardContent>
@@ -500,28 +520,49 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
             </select>
           </div>
         </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="aws-pub">SSH public key</Label>
-          <Textarea
-            id="aws-pub"
-            value={publicKey}
-            onChange={(e) => setPublicKey(e.target.value)}
-            rows={2}
-            placeholder="ssh-ed25519 AAAA…"
-            className="rounded-xl font-mono text-xs"
+
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">Use my own SSH key pair</p>
+            <p className="text-xs text-muted-foreground">
+              {useManualKeys
+                ? "Paste the keys EC2 should use."
+                : "Leave off — keys are generated on the server for this launch."}
+            </p>
+          </div>
+          <Switch
+            checked={useManualKeys}
+            onCheckedChange={(v) => setUseManualKeys(Boolean(v))}
+            aria-label="Use my own SSH key pair"
           />
         </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="aws-priv">SSH private key</Label>
-          <Textarea
-            id="aws-priv"
-            value={privateKey}
-            onChange={(e) => setPrivateKey(e.target.value)}
-            rows={4}
-            placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-            className="rounded-xl font-mono text-xs"
-          />
-        </div>
+
+        {useManualKeys ? (
+          <>
+            <div className="grid gap-1.5">
+              <Label htmlFor="aws-pub">SSH public key</Label>
+              <Textarea
+                id="aws-pub"
+                value={publicKey}
+                onChange={(e) => setPublicKey(e.target.value)}
+                rows={2}
+                placeholder="ssh-ed25519 AAAA…"
+                className="rounded-xl font-mono text-xs"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="aws-priv">SSH private key</Label>
+              <Textarea
+                id="aws-priv"
+                value={privateKey}
+                onChange={(e) => setPrivateKey(e.target.value)}
+                rows={4}
+                placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                className="rounded-xl font-mono text-xs"
+              />
+            </div>
+          </>
+        ) : null}
 
         <Button
           type="button"
