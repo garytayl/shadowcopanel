@@ -1,5 +1,7 @@
 import "server-only";
 
+import path from "path";
+
 import { getResolvedCheckPort, requireResolvedServerEnv } from "@/lib/server-profiles/resolve";
 import { measureControlLinkRoundTrip, sshExec, sshReadFile, sshWriteFile } from "@/lib/ssh/client";
 import { shSingleQuote } from "@/lib/ssh/orchestration";
@@ -152,13 +154,40 @@ export async function getHealthSnapshot(): Promise<{
   };
 }
 
+/** SFTP / fs errors when the remote path does not exist yet (fresh instance, wrong path). */
+function isRemoteFileMissingError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("no such file") ||
+    m.includes("enoent") ||
+    m.includes("does not exist") ||
+    (m.includes("cannot stat") && m.includes("no such file"))
+  );
+}
+
+/** Ensures the parent directory of REFORGER_CONFIG_PATH exists (Linux path). */
+export async function ensureRemoteConfigDirectoryExists(): Promise<void> {
+  const env = await requireResolvedServerEnv();
+  const configPath = env.REFORGER_CONFIG_PATH.replace(/\\/g, "/");
+  const dir = path.posix.dirname(configPath);
+  const r = await sshExec(`mkdir -p ${shSingleQuote(dir)}`);
+  if (r.code !== 0) {
+    throw new Error(
+      r.stderr.trim() || r.stdout.trim() || "Could not create remote directory for config.json",
+    );
+  }
+}
+
 export async function getRemoteConfigText(): Promise<string> {
   const env = await requireResolvedServerEnv();
-  const path = env.REFORGER_CONFIG_PATH;
+  const configPath = env.REFORGER_CONFIG_PATH;
   try {
-    return await sshReadFile(path);
+    return await sshReadFile(configPath);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    if (isRemoteFileMissingError(msg)) {
+      return "{}\n";
+    }
     throw new Error(`Failed to read remote config: ${msg}`);
   }
 }
@@ -187,6 +216,8 @@ export async function saveRemoteConfig(config: ReforgerConfig): Promise<RemoteCo
   if (!v.ok) {
     throw new Error(v.issues.map((i) => `${i.path}: ${i.message}`).join("; "));
   }
+
+  await ensureRemoteConfigDirectoryExists();
 
   const backup = await backupRemoteConfigBeforeWrite();
   if (!backup.ok) {
