@@ -11,7 +11,17 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import type { ServerProfilePublic } from "@/lib/server-profiles/types";
 import { cn } from "@/lib/utils";
+
+export type AwsProvisionCompleteResult = {
+  ok?: boolean;
+  error?: string;
+  profileId?: string;
+  host?: string;
+  activated?: boolean;
+  profile?: ServerProfilePublic;
+};
 
 type Options = {
   enabled: boolean;
@@ -33,7 +43,7 @@ type AwsSettings = {
 };
 
 type Props = {
-  onProvisioned: () => void;
+  onProvisioned: (result?: AwsProvisionCompleteResult) => void | Promise<void>;
 };
 
 const MAX_LOG = 80;
@@ -308,13 +318,16 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
               },
         ),
       });
-      const fj = (await fin.json()) as { error?: string; ok?: boolean; host?: string };
+      const fj = (await fin.json()) as AwsProvisionCompleteResult & { error?: string };
       if (!fin.ok) throw new Error(fj.error ?? "Finalize failed");
 
       pushLog(`Done — ${fj.host ?? ipv4}`);
+      if (fj.profile?.name) {
+        pushLog(`Saved “${fj.profile.name}” to Server setup.`);
+      }
       toast.success(`Ready — ${fj.host ?? ipv4}`);
       setPrivateKey("");
-      onProvisioned();
+      await onProvisioned(fj);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Provisioning failed";
       pushLog(msg);

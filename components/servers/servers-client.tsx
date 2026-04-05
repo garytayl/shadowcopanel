@@ -27,7 +27,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { ServerProfilePublic } from "@/lib/server-profiles/types";
-import { AwsProvisionCard } from "@/components/servers/aws-provision-card";
+import {
+  AwsProvisionCard,
+  type AwsProvisionCompleteResult,
+} from "@/components/servers/aws-provision-card";
 
 type ListResponse = {
   profiles: ServerProfilePublic[];
@@ -60,14 +63,22 @@ export function ServersClient() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(defaultForm);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { ensureProfile?: ServerProfilePublic | null }) => {
     setLoading(true);
     try {
-      const r = await fetch("/api/server-profiles", { cache: "no-store" });
+      const r = await fetch("/api/server-profiles", {
+        cache: "no-store",
+        credentials: "include",
+      });
       if (!r.ok) throw new Error(await r.text());
       const data = (await r.json()) as ListResponse;
-      setProfiles(data.profiles);
-      setActiveProfileId(data.activeProfileId);
+      let merged = data.profiles;
+      const ensure = opts?.ensureProfile;
+      if (ensure && !merged.some((p) => p.id === ensure.id)) {
+        merged = [...merged, ensure];
+      }
+      setProfiles(merged);
+      setActiveProfileId(data.activeProfileId ?? ensure?.id ?? null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load servers");
     } finally {
@@ -223,8 +234,9 @@ export function ServersClient() {
   return (
     <div className="space-y-6">
       <AwsProvisionCard
-        onProvisioned={() => {
-          void load();
+        onProvisioned={async (result: AwsProvisionCompleteResult | undefined) => {
+          await new Promise((r) => setTimeout(r, 0));
+          await load({ ensureProfile: result?.profile ?? null });
           dispatchActiveServerChanged();
           router.refresh();
         }}

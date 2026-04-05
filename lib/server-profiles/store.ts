@@ -92,9 +92,17 @@ function useRedisForProfiles(): boolean {
   return isUpstashRedisConfigured();
 }
 
+/** Vercel serverless has no durable local disk; file-based profiles are per-instance and appear “lost”. */
+function isVercelServerless(): boolean {
+  return Boolean(process.env.VERCEL);
+}
+
 export async function readProfilesFromDisk(): Promise<ServerProfile[]> {
   if (useRedisForProfiles()) {
     return readProfilesFromRedis();
+  }
+  if (isVercelServerless()) {
+    return [];
   }
   return readProfilesFromFile();
 }
@@ -103,6 +111,11 @@ export async function writeProfilesToDisk(profiles: ServerProfile[]): Promise<vo
   if (useRedisForProfiles()) {
     await writeProfilesToRedis(profiles);
     return;
+  }
+  if (isVercelServerless()) {
+    throw new Error(
+      "Saved servers require Upstash Redis on Vercel. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN on this deployment (see .env.example).",
+    );
   }
   await writeProfilesToFile(profiles);
 }

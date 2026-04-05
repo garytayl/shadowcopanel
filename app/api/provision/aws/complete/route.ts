@@ -5,6 +5,7 @@ import { isAwsEc2ProvisionEnabledAsync } from "@/lib/provision/aws-env";
 import { describeInstance } from "@/lib/provision/aws-ec2";
 import { takeLaunchPrivateKey } from "@/lib/provision/provision-launch-keys";
 import { ACTIVE_PROFILE_COOKIE } from "@/lib/server-profiles/resolve";
+import { toPublicProfile } from "@/lib/server-profiles/public";
 import { upsertProfile } from "@/lib/server-profiles/store";
 import type { ServerProfile } from "@/lib/server-profiles/types";
 
@@ -129,7 +130,12 @@ export async function POST(req: Request) {
     checkPort,
   };
 
-  await upsertProfile(profile);
+  try {
+    await upsertProfile(profile);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: msg }, { status: 503 });
+  }
 
   const activate = body.activate !== false;
   const res = NextResponse.json({
@@ -137,6 +143,7 @@ export async function POST(req: Request) {
     profileId: id,
     host: ipv4,
     activated: activate,
+    profile: toPublicProfile(profile),
   });
 
   if (activate) {
