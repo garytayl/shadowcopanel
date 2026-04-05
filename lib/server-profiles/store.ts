@@ -4,6 +4,7 @@ import { existsSync } from "fs";
 import fs from "fs/promises";
 import path from "path";
 
+import { parseRedisJson } from "@/lib/persistence/redis-json";
 import { getRedis, isUpstashRedisConfigured, REDIS_KEYS } from "@/lib/persistence/upstash-redis";
 import type { ServerProfile, ServerProfileId } from "@/lib/server-profiles/types";
 
@@ -71,14 +72,10 @@ async function writeProfilesToFile(profiles: ServerProfile[]): Promise<void> {
 async function readProfilesFromRedis(): Promise<ServerProfile[]> {
   const redis = getRedis();
   if (!redis) return [];
-  const raw = await redis.get<string>(REDIS_KEYS.serverProfiles);
-  if (raw == null || raw === "") return [];
-  try {
-    const j = JSON.parse(raw) as unknown;
-    return parseFileShape(j);
-  } catch {
-    return [];
-  }
+  const raw = await redis.get(REDIS_KEYS.serverProfiles);
+  const j = parseRedisJson<unknown>(raw);
+  if (j == null) return [];
+  return parseFileShape(j);
 }
 
 async function writeProfilesToRedis(profiles: ServerProfile[]): Promise<void> {

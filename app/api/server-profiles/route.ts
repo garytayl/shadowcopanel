@@ -9,6 +9,14 @@ import { toPublicProfile } from "@/lib/server-profiles/public";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const cookieOpts = {
+  httpOnly: true as const,
+  sameSite: "lax" as const,
+  path: "/",
+  maxAge: 60 * 60 * 24 * 400,
+  secure: process.env.NODE_ENV === "production",
+};
+
 function parseBody(body: unknown): Partial<ServerProfile> | null {
   if (body == null || typeof body !== "object") return null;
   return body as Partial<ServerProfile>;
@@ -85,6 +93,17 @@ export async function GET() {
   } catch {
     activeProfileId = null;
   }
+
+  const ids = new Set(list.map((p) => p.id));
+  if (activeProfileId && !ids.has(activeProfileId)) {
+    const res = NextResponse.json({
+      profiles: list.map(toPublicProfile),
+      activeProfileId: null,
+    });
+    res.cookies.set(ACTIVE_PROFILE_COOKIE, "", { ...cookieOpts, maxAge: 0 });
+    return res;
+  }
+
   return NextResponse.json({
     profiles: list.map(toPublicProfile),
     activeProfileId,

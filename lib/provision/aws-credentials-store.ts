@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "fs";
 import fs from "fs/promises";
 import path from "path";
 
+import { parseRedisJson } from "@/lib/persistence/redis-json";
 import { getRedis, isUpstashRedisConfigured, REDIS_KEYS } from "@/lib/persistence/upstash-redis";
 
 export type StoredAwsCredentials = {
@@ -75,15 +76,10 @@ export async function readStoredAwsCredentialsAsync(): Promise<StoredAwsCredenti
   if (isUpstashRedisConfigured()) {
     const redis = getRedis();
     if (!redis) return null;
-    const raw = await redis.get<string>(REDIS_KEYS.awsCredentials);
-    if (raw == null || raw === "") return null;
-    try {
-      const j = JSON.parse(raw) as unknown;
-      if (!isStoredShape(j)) return null;
-      return j;
-    } catch {
-      return null;
-    }
+    const raw = await redis.get(REDIS_KEYS.awsCredentials);
+    const j = parseRedisJson<unknown>(raw);
+    if (j == null || !isStoredShape(j)) return null;
+    return j;
   }
   return readAwsCredentialsFromDiskSync();
 }

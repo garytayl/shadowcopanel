@@ -120,6 +120,7 @@ export function ServersClient() {
     try {
       const r = await fetch("/api/server-profiles/active", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ profileId: id }),
       });
@@ -141,11 +142,21 @@ export function ServersClient() {
     try {
       const r = await fetch("/api/server-profiles/test", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ profileId: id }),
       });
-      const j = (await r.json()) as { ok?: boolean; message?: string; roundTripMs?: number };
+      const j = (await r.json()) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+        roundTripMs?: number;
+      };
       toast.dismiss(t);
+      if (!r.ok) {
+        toast.error(j.error ?? "Request failed");
+        return;
+      }
       if (j.ok) {
         toast.success(`SSH OK (${j.roundTripMs ?? "?"} ms control round-trip)`);
       } else {
