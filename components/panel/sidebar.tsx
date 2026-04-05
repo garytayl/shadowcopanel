@@ -32,7 +32,7 @@ import {
 
 const links = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard },
-  { href: "/servers", label: "Servers", icon: Server },
+  { href: "/servers", label: "Server setup", icon: Server },
   { href: "/activity", label: "Activity", icon: History },
   { href: "/config", label: "Config", icon: FileJson },
   { href: "/marketplace", label: "Marketplace", icon: Store },

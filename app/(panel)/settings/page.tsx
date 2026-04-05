@@ -26,7 +26,7 @@ export default async function SettingsPage() {
     <>
       <PageHeader
         title="Connection details"
-        description="A read-only checklist of how this website reaches your game server. Add or switch saved connections on the Servers page."
+        description="A read-only checklist of how this website reaches your game server. Add or switch saved connections on Server setup."
       >
         <InPlainEnglish title="Why this looks technical">
           <p>
@@ -43,8 +43,7 @@ export default async function SettingsPage() {
           <AlertTitle className="text-foreground">Using a saved server profile</AlertTitle>
           <AlertDescription className="text-sm leading-relaxed text-muted-foreground">
             Active connection: <strong className="text-foreground">{s.activeProfileName}</strong>. Manage
-            profiles on the <a className="text-primary underline underline-offset-2" href="/servers">Servers</a>{" "}
-            page.
+            profiles on <a className="text-primary underline underline-offset-2" href="/servers">Server setup</a>.
           </AlertDescription>
         </Alert>
       ) : null}

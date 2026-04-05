@@ -73,7 +73,7 @@ export async function requireResolvedServerEnv(): Promise<ServerEnv> {
   const e = await tryGetResolvedServerEnv();
   if (!e) {
     throw new Error(
-      "SSH is not configured. Add a saved server on the Servers page, or set REFORGER_SSH_HOST, REFORGER_SSH_USER, and a private key in the environment.",
+      "SSH is not configured. Add a saved server under Server setup, or set REFORGER_SSH_HOST, REFORGER_SSH_USER, and a private key in the environment.",
     );
   }
   return e;

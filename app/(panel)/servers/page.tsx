@@ -8,14 +8,13 @@ export default function ServersPage() {
   return (
     <>
       <PageHeader
-        title="Servers"
-        description="Save SSH connections and switch which machine the panel controls—without editing deployment env vars each time."
+        title="Server setup"
+        description="Connect this panel to your game machine, or launch a new one from here—no cloud console required for day-to-day use."
       >
-        <InPlainEnglish title="What this is for">
+        <InPlainEnglish title="How it works">
           <p>
-            Each entry is a <strong>full connection profile</strong>: where to SSH, which folder holds the
-            game, and your private key. Pick one as <strong>active</strong> and every dashboard action uses
-            it. Your key stays on the server that runs Next.js, not in the browser.
+            Choose which machine the panel controls, then use Dashboard and Config as usual. Connection
+            details are stored on the server that runs this app—not in visitors&apos; browsers.
           </p>
         </InPlainEnglish>
       </PageHeader>

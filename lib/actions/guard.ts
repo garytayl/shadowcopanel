@@ -5,7 +5,7 @@ import { err, type ApiErr } from "@/lib/types/api";
 
 export function notConfiguredError(): ApiErr {
   return err(
-    "SSH is not configured. Add a server on the Servers page, or add .env.local from .env.example and restart the dev server.",
+    "SSH is not configured. Add a server under Server setup, or add .env.local from .env.example and restart the dev server.",
     "NOT_CONFIGURED",
   );
 }

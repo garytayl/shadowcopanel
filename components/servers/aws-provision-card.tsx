@@ -120,7 +120,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
       });
       const j = (await r.json()) as { error?: string };
       if (!r.ok) throw new Error(j.error ?? "Save failed");
-      toast.success("AWS credentials saved on this server.");
+      toast.success("Connection saved. You can launch a server from this page.");
       setConnectSecretKey("");
       await loadAll();
     } catch (e) {
@@ -131,7 +131,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
   }
 
   async function removeAwsCredentialsFile() {
-    if (!confirm("Remove saved AWS credentials from this server?")) return;
+    if (!confirm("Remove saved cloud credentials from this server?")) return;
     try {
       const r = await fetch("/api/provision/aws/settings", { method: "DELETE" });
       const j = (await r.json()) as { error?: string };
@@ -161,7 +161,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
     }
 
     setBusy(true);
-    const t = toast.loading("Launching EC2 instance…");
+    const t = toast.loading("Launching your server…");
     try {
       const create = await fetch("/api/provision/aws", {
         method: "POST",
@@ -202,7 +202,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
 
       if (!ipv4 || status !== "running") {
         throw new Error(
-          "Instance is still starting or has no public IP. Check the EC2 console, then add a manual server profile with the elastic IP or public IP.",
+          "Server is still starting or has no public IP yet. Wait a minute and add it manually with “Add server”, or try again.",
         );
       }
 
@@ -214,7 +214,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
         body: JSON.stringify({
           awsInstanceId: instanceId,
           awsRegion,
-          profileName: label.trim() || "EC2 instance",
+          profileName: label.trim() || "Game server",
           privateKey: priv,
           activate: true,
           checkPort: checkPort.trim() ? Number(checkPort) : null,
@@ -223,7 +223,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
       const fj = (await fin.json()) as { error?: string; ok?: boolean; host?: string };
       if (!fin.ok) throw new Error(fj.error ?? "Finalize failed");
 
-      toast.success(`Ready — ${fj.host ?? ipv4}. Profile is active (SSH user ubuntu).`, { id: t });
+      toast.success(`Ready — ${fj.host ?? ipv4}. This server is now active.`, { id: t });
       setPrivateKey("");
       onProvisioned();
     } catch (e) {
@@ -238,7 +238,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
       <Card className="rounded-2xl border-border/80">
         <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" aria-hidden />
-          Loading AWS…
+          Loading…
         </CardContent>
       </Card>
     );
@@ -251,12 +251,11 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <ServerCog className="size-4" aria-hidden />
-            New EC2 (Amazon API)
+            Launch a new server
           </CardTitle>
           <CardDescription>
-            Connect your AWS account here so you do not have to edit <code className="text-xs">.env</code>{" "}
-            or hosting env vars for keys. Launching instances still uses the API—no EC2 click-through for
-            create.
+            One-time setup: add cloud access keys on this host (here or in environment variables) so this
+            page can create a machine for you. End users never need the cloud dashboard for daily use.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 text-sm leading-relaxed text-muted-foreground">
@@ -269,19 +268,16 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
           {credentialsLockedByEnv ? (
             <div className="space-y-2">
               <p>
-                This host already has <code className="text-xs text-foreground">AWS_ACCESS_KEY_ID</code> and{" "}
-                <code className="text-xs text-foreground">AWS_SECRET_ACCESS_KEY</code> in the environment.
-                EC2 provisioning is enabled from those values. To use the form below instead, remove those
-                env vars and reload.
+                Cloud keys are already set on this host. Launch is enabled. To paste keys in the form
+                instead, remove the cloud key variables from the host environment and reload.
               </p>
             </div>
           ) : (
             <>
               <p className="text-xs">
-                One-time outside the app: create an AWS account and an IAM user with EC2 permissions, then
-                create <strong>access keys</strong> (you can use the AWS CLI or the IAM page once). Paste
-                them here—keys are stored only on this server in{" "}
-                <code className="text-foreground">data/aws-credentials.json</code> (gitignored).
+                Paste access keys from your cloud provider (stored only on this server, e.g.{" "}
+                <code className="text-foreground">data/aws-credentials.json</code>). You only do this once
+                per deployment.
               </p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="grid gap-1.5">
@@ -349,7 +345,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
                     Saving…
                   </>
                 ) : (
-                  "Save & enable EC2"
+                  "Save & enable launch"
                 )}
               </Button>
             </>
@@ -365,21 +361,20 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <ServerCog className="size-4" aria-hidden />
-          New EC2 (Amazon API)
+          Launch a new server
         </CardTitle>
         <CardDescription>
-          Launches Ubuntu 22.04 in your default VPC, opens SSH + UDP 2001/17777 (CIDR from your saved
-          settings or env), cloud-init creates <code className="text-xs">/home/ubuntu/arma-reforger</code>.
-          SSH user <strong>ubuntu</strong>.
+          Creates a fresh Ubuntu machine, opens the game ports, and connects this panel for you. Paste the
+          SSH key pair you want to use—only this app stores the private key to manage the server.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
         {awsSettings ? (
           <div className="space-y-2 rounded-xl border border-border/80 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
             <p>
-              <span className="font-medium text-foreground">AWS credentials:</span>{" "}
+              <span className="font-medium text-foreground">Cloud access:</span>{" "}
               {awsSettings.source === "env" ? (
-                <>environment variables on this host</>
+                <>set on this host (environment)</>
               ) : (
                 <>
                   saved on this server (
@@ -401,7 +396,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
                 className="h-8 rounded-lg text-xs"
                 onClick={() => void removeAwsCredentialsFile()}
               >
-                Remove saved credentials
+                Remove saved keys
               </Button>
             ) : null}
             {awsSettings.envOverrides ? (
@@ -414,7 +409,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
         ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="grid gap-1.5">
-            <Label htmlFor="aws-label">Name prefix</Label>
+            <Label htmlFor="aws-label">Server name</Label>
             <Input
               id="aws-label"
               value={label}
@@ -434,7 +429,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="grid gap-1.5">
-            <Label htmlFor="aws-region">Region</Label>
+            <Label htmlFor="aws-region">Location (region)</Label>
             <select
               id="aws-region"
               className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
@@ -449,7 +444,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
             </select>
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="aws-type">Instance type</Label>
+            <Label htmlFor="aws-type">Size</Label>
             <select
               id="aws-type"
               className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
@@ -498,7 +493,7 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
               Working…
             </>
           ) : (
-            "Launch EC2 & connect panel"
+            "Launch server & connect"
           )}
         </Button>
       </CardContent>

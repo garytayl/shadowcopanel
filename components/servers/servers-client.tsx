@@ -110,7 +110,9 @@ export function ServersClient() {
       });
       if (!r.ok) throw new Error((await r.json()).error ?? "Failed");
       setActiveProfileId(id);
-      toast.success(id ? "This server is now active for the panel." : "Using environment variables only.");
+      toast.success(
+        id ? "This server is now active for the panel." : "Using the default connection from host settings.",
+      );
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to activate");
@@ -218,8 +220,7 @@ export function ServersClient() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Saved connections live in <code className="text-xs">data/server-profiles.json</code> on the
-          machine running this app. Keys never leave the server.
+          Saved servers are remembered on this host. Keys are not sent to browsers.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -229,7 +230,7 @@ export function ServersClient() {
             className="rounded-xl"
             onClick={() => void setActive(null)}
           >
-            Use env vars only
+            Use default connection
           </Button>
           <Button
             type="button"
@@ -253,8 +254,7 @@ export function ServersClient() {
           <CardHeader>
             <CardTitle className="text-base">No saved servers yet</CardTitle>
             <CardDescription>
-              Add your VPS details and SSH key here, then click <strong>Use this server</strong> so the
-              dashboard talks to that machine instead of (or as well as) <code className="text-xs">.env</code>.
+              Add the IP or hostname and SSH key for your game server, then choose <strong>Use this server</strong>.
             </CardDescription>
           </CardHeader>
         </Card>
