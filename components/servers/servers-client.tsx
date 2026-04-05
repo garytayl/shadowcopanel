@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { ServerProfilePublic } from "@/lib/server-profiles/types";
+import { AwsProvisionCard } from "@/components/servers/aws-provision-card";
 import { DigitalOceanProvisionCard } from "@/components/servers/digitalocean-provision-card";
 import { HetznerProvisionCard } from "@/components/servers/hetzner-provision-card";
 
@@ -215,6 +216,7 @@ export function ServersClient() {
 
   return (
     <div className="space-y-6">
+      <AwsProvisionCard onProvisioned={() => void load()} />
       <DigitalOceanProvisionCard onProvisioned={() => void load()} />
       <HetznerProvisionCard onProvisioned={() => void load()} />
 
