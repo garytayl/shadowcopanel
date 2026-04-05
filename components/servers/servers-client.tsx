@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { ServerProfilePublic } from "@/lib/server-profiles/types";
+import { HetznerProvisionCard } from "@/components/servers/hetzner-provision-card";
 
 type ListResponse = {
   profiles: ServerProfilePublic[];
@@ -213,6 +214,8 @@ export function ServersClient() {
 
   return (
     <div className="space-y-6">
+      <HetznerProvisionCard onProvisioned={() => void load()} />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           Saved connections live in <code className="text-xs">data/server-profiles.json</code> on the
