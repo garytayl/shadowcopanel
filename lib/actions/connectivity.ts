@@ -4,9 +4,8 @@ import { ensureConfigured } from "@/lib/actions/guard";
 import { safeRecordActivity } from "@/lib/activity/log";
 import { requireResolvedServerEnv } from "@/lib/server-profiles/resolve";
 import { runJoinabilityDiagnostics } from "@/lib/ssh/joinability";
-import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
-import { getRemoteConfigText, saveRemoteConfig, type RemoteConfigSaveResult } from "@/lib/ssh/reforger";
-import { parseConfigJson, type ReforgerConfig } from "@/lib/types/reforger-config";
+import { syncPublicAddressToSshHost } from "@/lib/ssh/sync-public-address";
+import type { RemoteConfigSaveResult } from "@/lib/ssh/reforger";
 import { err, ok, type ApiResult } from "@/lib/types/api";
 import type { JoinabilityResult } from "@/lib/types/connectivity";
 
@@ -40,22 +39,15 @@ export async function actionSyncPublicAddressToPanelHost(): Promise<
   const g = await ensureConfigured();
   if (g !== true) return g;
   try {
+    const r = await syncPublicAddressToSshHost();
     const env = await requireResolvedServerEnv();
-    const host = env.REFORGER_SSH_HOST.trim();
-    if (!host) return err("Panel host is not set");
-
-    const raw = await getRemoteConfigText();
-    const p = parseConfigJson(raw);
-    if (!p.ok) return err(p.error);
-    const base = normalizeReforgerConfig(p.value as ReforgerConfig).config;
-    const next: ReforgerConfig = { ...base, publicAddress: host };
-    const r = await saveRemoteConfig(next);
+    const h = env.REFORGER_SSH_HOST.trim();
     safeRecordActivity({
       type: "config_saved",
       severity: "success",
       title: "Public address synced from panel",
-      message: `publicAddress → ${host}`,
-      metadata: { bytes: r.bytes, host },
+      message: `publicAddress → ${h}`,
+      metadata: { bytes: r.bytes, host: h },
     });
     return ok(r);
   } catch (e) {

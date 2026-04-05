@@ -44,6 +44,7 @@ import {
   actionRunJoinabilityCheck,
   actionSyncPublicAddressToPanelHost,
 } from "@/lib/actions/connectivity";
+import { actionRepairJoinabilityFromPanel } from "@/lib/actions/repair-joinability";
 import { loadModsAction } from "@/lib/actions/mods";
 import { hostsEffectivelyMatch } from "@/lib/connectivity/joinability-model";
 import type { JoinabilityResult } from "@/lib/types/connectivity";
@@ -63,6 +64,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConnectivitySection } from "@/components/dashboard/connectivity-section";
+import { JoinRepairBanner } from "@/components/dashboard/join-repair-banner";
 import { ServerActivitySection } from "@/components/dashboard/server-activity-section";
 import { HealthScoreCard } from "@/components/dashboard/health-score-card";
 import { LogAnalysisCard } from "@/components/panel/log-analysis-card";
@@ -269,6 +271,22 @@ export function DashboardClient() {
     }
   }, []);
 
+  const handleSyncPublicIp = useCallback(async () => {
+    setSyncLoading(true);
+    try {
+      const r = await actionSyncPublicAddressToPanelHost();
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success(`Saved config (${r.data.bytes} bytes)`);
+      setJoinResult(null);
+      await refresh();
+    } finally {
+      setSyncLoading(false);
+    }
+  }, [refresh]);
+
   useOnActiveServerChanged(refresh);
 
   useEffect(() => {
@@ -403,6 +421,36 @@ export function DashboardClient() {
     }
   }
 
+  async function runRepairJoinabilityFromPanelAction() {
+    setActionKey("repair-join");
+    try {
+      const r = await actionRepairJoinabilityFromPanel();
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      const data = r.data.fix;
+      setLastFix(data);
+      try {
+        localStorage.setItem(LAST_FIX_KEY, JSON.stringify(data));
+      } catch {
+        /* ignore */
+      }
+      if (data.level === "failure" || !data.success) {
+        toast.error(data.summary);
+      } else if (data.level === "warning") {
+        toast.message(data.summary, {
+          description: "Public IP synced, then repair ran. See “Last repair” below for steps.",
+        });
+      } else {
+        toast.success(data.summary);
+      }
+      await refresh();
+    } finally {
+      setActionKey(null);
+    }
+  }
+
   async function run(
     key: string,
     fn: () => Promise<{ ok: boolean; error?: string; data?: unknown }>,
@@ -476,6 +524,16 @@ export function DashboardClient() {
     return p?.status === "listening";
   }, [snap?.portChecks]);
 
+  const showJoinRepairBanner = useMemo(
+    () =>
+      Boolean(
+        snap?.settings?.configured &&
+        snap?.status?.sshReachable &&
+        snap?.runtimeTruth?.joinability === "not_joinable",
+      ),
+    [snap?.settings?.configured, snap?.status?.sshReachable, snap?.runtimeTruth?.joinability],
+  );
+
   const mem = useMemo(
     () => (snap?.health?.free ? parseFreeMemM(snap.health.free) : null),
     [snap?.health?.free],
@@ -532,6 +590,16 @@ export function DashboardClient() {
           <AlertTitle className="text-foreground">Notice</AlertTitle>
           <AlertDescription className="text-muted-foreground">{s.announcement}</AlertDescription>
         </Alert>
+      ) : null}
+
+      {showJoinRepairBanner ? (
+        <JoinRepairBanner
+          disabled={!!actionKey || !s?.configured}
+          repairLoading={actionKey === "repair-join"}
+          syncLoading={syncLoading}
+          onRepair={runRepairJoinabilityFromPanelAction}
+          onSyncOnly={handleSyncPublicIp}
+        />
       ) : null}
 
       {/* Hero — status + power */}
@@ -730,21 +798,7 @@ export function DashboardClient() {
             setJoinLoading(false);
           }
         }}
-        onSyncPublicIp={async () => {
-          setSyncLoading(true);
-          try {
-            const r = await actionSyncPublicAddressToPanelHost();
-            if (!r.ok) {
-              toast.error(r.error);
-              return;
-            }
-            toast.success(`Saved config (${r.data.bytes} bytes)`);
-            setJoinResult(null);
-            await refresh();
-          } finally {
-            setSyncLoading(false);
-          }
-        }}
+        onSyncPublicIp={handleSyncPublicIp}
       />
 
       {/* Quick actions */}
