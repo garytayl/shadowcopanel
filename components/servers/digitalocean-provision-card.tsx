@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Cloud, Loader2 } from "lucide-react";
+import { Droplets, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -20,22 +20,22 @@ type Options = {
   enabled: boolean;
   error?: string;
   defaultImage: string;
-  locations: { name: string; description: string }[];
-  serverTypes: { name: string; description: string; cores: number; memory: number }[];
+  regions: { slug: string; name: string }[];
+  sizes: { slug: string; description: string; vcpus: number; memory: number }[];
 };
 
 type Props = {
   onProvisioned: () => void;
 };
 
-export function HetznerProvisionCard({ onProvisioned }: Props) {
+export function DigitalOceanProvisionCard({ onProvisioned }: Props) {
   const [opts, setOpts] = useState<Options | null>(null);
   const [loadingOpts, setLoadingOpts] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const [label, setLabel] = useState("reforger");
-  const [location, setLocation] = useState("");
-  const [serverType, setServerType] = useState("");
+  const [region, setRegion] = useState("");
+  const [size, setSize] = useState("");
   const [publicKey, setPublicKey] = useState("");
   const [privateKey, setPrivateKey] = useState("");
   const [checkPort, setCheckPort] = useState("2001");
@@ -43,21 +43,27 @@ export function HetznerProvisionCard({ onProvisioned }: Props) {
   const loadOpts = useCallback(async () => {
     setLoadingOpts(true);
     try {
-      const r = await fetch("/api/provision/hetzner/options", { cache: "no-store" });
+      const r = await fetch("/api/provision/digitalocean/options", { cache: "no-store" });
       const j = (await r.json()) as Options;
       setOpts(j);
-      setLocation((prev) => {
+      setRegion((prev) => {
         if (prev) return prev;
-        return j.locations[0]?.name ?? "";
+        return j.regions[0]?.slug ?? "";
       });
-      setServerType((prev) => {
+      setSize((prev) => {
         if (prev) return prev;
         const pick =
-          j.serverTypes.find((t) => /cx22|cx21|cx11/i.test(t.name)) ?? j.serverTypes[0];
-        return pick?.name ?? "";
+          j.sizes.find((s) => /s-2vcpu-4gb|s-1vcpu-2gb|s-1vcpu-1gb/i.test(s.slug)) ??
+          j.sizes[0];
+        return pick?.slug ?? "";
       });
     } catch {
-      setOpts({ enabled: false, defaultImage: "ubuntu-22.04", locations: [], serverTypes: [] });
+      setOpts({
+        enabled: false,
+        defaultImage: "ubuntu-22-04-x64",
+        regions: [],
+        sizes: [],
+      });
     } finally {
       setLoadingOpts(false);
     }
@@ -76,69 +82,71 @@ export function HetznerProvisionCard({ onProvisioned }: Props) {
       return;
     }
     if (!priv.includes("BEGIN") || !priv.includes("PRIVATE KEY")) {
-      toast.error("Paste the matching private key so this panel can SSH to the new server.");
+      toast.error("Paste the matching private key so this panel can SSH to the new droplet.");
       return;
     }
-    if (!location || !serverType) {
-      toast.error("Choose a location and server type.");
+    if (!region || !size) {
+      toast.error("Choose a region and droplet size.");
       return;
     }
 
     setBusy(true);
-    const t = toast.loading("Creating Hetzner server…");
+    const t = toast.loading("Creating DigitalOcean droplet…");
     try {
-      const create = await fetch("/api/provision/hetzner", {
+      const create = await fetch("/api/provision/digitalocean", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           label,
-          location,
-          serverType,
+          region,
+          size,
           image: opts.defaultImage,
           publicKey: pk,
         }),
       });
       const cj = (await create.json()) as {
         error?: string;
-        hetznerServerId?: number;
-        hetznerSshKeyId?: number;
+        digitaloceanDropletId?: number;
+        digitaloceanSshKeyId?: number;
       };
       if (!create.ok) {
         throw new Error(cj.error ?? "Create failed");
       }
-      const serverId = cj.hetznerServerId;
-      const sshKeyId = cj.hetznerSshKeyId;
-      if (serverId == null) throw new Error("No server id returned");
+      const dropletId = cj.digitaloceanDropletId;
+      const sshKeyId = cj.digitaloceanSshKeyId;
+      if (dropletId == null) throw new Error("No droplet id returned");
 
-      toast.loading("Waiting for public IP and running state…", { id: t });
+      toast.loading("Waiting for public IP and active status…", { id: t });
 
       let ipv4: string | null = null;
       let status = "";
       for (let i = 0; i < 80; i++) {
         await new Promise((r) => setTimeout(r, 3000));
-        const st = await fetch(`/api/provision/hetzner/${serverId}`, { cache: "no-store" });
+        const st = await fetch(`/api/provision/digitalocean/${dropletId}`, {
+          cache: "no-store",
+        });
         const sj = (await st.json()) as { status?: string; ipv4?: string | null; error?: string };
         if (!st.ok) throw new Error(sj.error ?? "Status check failed");
         status = sj.status ?? "";
         ipv4 = sj.ipv4 ?? null;
-        if (status === "running" && ipv4) break;
+        if (status === "active" && ipv4) break;
       }
 
-      if (!ipv4 || status !== "running") {
+      if (!ipv4 || status !== "active") {
         throw new Error(
-          "Server is still starting. Note the server id from Hetzner, wait a few minutes, then add a manual server profile with the same IP and keys.",
+          "Droplet is still starting. Check the DigitalOcean dashboard, wait for a public IP, then add a manual server profile.",
         );
       }
 
       toast.loading("Saving panel profile…", { id: t });
 
-      const fin = await fetch("/api/provision/hetzner/complete", {
+      const fin = await fetch("/api/provision/digitalocean/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          hetznerServerId: serverId,
-          hetznerSshKeyId: sshKeyId ?? undefined,
-          profileName: label.trim() || "Hetzner server",
+          digitaloceanDropletId: dropletId,
+          digitaloceanSshKeyId: sshKeyId ?? undefined,
+          profileName: label.trim() || "DigitalOcean droplet",
           privateKey: priv,
           activate: true,
           checkPort: checkPort.trim() ? Number(checkPort) : null,
@@ -147,7 +155,7 @@ export function HetznerProvisionCard({ onProvisioned }: Props) {
       const fj = (await fin.json()) as { error?: string; ok?: boolean; host?: string };
       if (!fin.ok) throw new Error(fj.error ?? "Finalize failed");
 
-      toast.success(`Ready — ${fj.host ?? ipv4}. Profile is active.`, { id: t });
+      toast.success(`Ready — ${fj.host ?? ipv4}. Profile is active (SSH user root).`, { id: t });
       setPrivateKey("");
       onProvisioned();
     } catch (e) {
@@ -162,7 +170,7 @@ export function HetznerProvisionCard({ onProvisioned }: Props) {
       <Card className="rounded-2xl border-border/80">
         <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" aria-hidden />
-          Loading provisioning options…
+          Loading DigitalOcean options…
         </CardContent>
       </Card>
     );
@@ -173,13 +181,13 @@ export function HetznerProvisionCard({ onProvisioned }: Props) {
       <Card className="rounded-2xl border-border/80 border-dashed">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Cloud className="size-4" aria-hidden />
-            New VPS (Hetzner Cloud)
+            <Droplets className="size-4" aria-hidden />
+            New VPS (DigitalOcean)
           </CardTitle>
           <CardDescription>
-            Optional: Hetzner Cloud. Add <code className="text-xs">HETZNER_API_TOKEN</code> on the server.
-            Prefer DigitalOcean? Use <code className="text-xs">DIGITALOCEAN_TOKEN</code> and the card above
-            instead. Billing is with the cloud provider.
+            Create a Droplet from this app (no AWS). Add{" "}
+            <code className="text-xs">DIGITALOCEAN_TOKEN</code> to the environment that runs this Next.js
+            app. Create a token under API → Tokens in DigitalOcean. Billing is with DigitalOcean.
           </CardDescription>
         </CardHeader>
         {opts?.error ? (
@@ -193,14 +201,13 @@ export function HetznerProvisionCard({ onProvisioned }: Props) {
     <Card className="rounded-2xl border-border/80">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Cloud className="size-4" aria-hidden />
-          New VPS (Hetzner Cloud)
+          <Droplets className="size-4" aria-hidden />
+          New VPS (DigitalOcean)
         </CardTitle>
         <CardDescription>
-          Spins up an Ubuntu server, installs base packages, creates{" "}
-          <code className="text-xs">/home/ubuntu/arma-reforger</code>, and adds a panel profile. You still
-          need to install the Reforger dedicated server binary on the machine (SteamCMD or upload). No AWS
-          console — only a Hetzner API token on this host.
+          Ubuntu image, base packages, and{" "}
+          <code className="text-xs">/root/arma-reforger</code> (SSH user <strong>root</strong> — standard
+          for DO Ubuntu images). Install the Reforger dedicated binary afterward. No AWS.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -209,18 +216,18 @@ export function HetznerProvisionCard({ onProvisioned }: Props) {
         ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="grid gap-1.5">
-            <Label htmlFor="hz-label">Name prefix</Label>
+            <Label htmlFor="do-label">Name prefix</Label>
             <Input
-              id="hz-label"
+              id="do-label"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               className="rounded-xl"
             />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="hz-port">Game port (panel checks)</Label>
+            <Label htmlFor="do-port">Game port (panel checks)</Label>
             <Input
-              id="hz-port"
+              id="do-port"
               value={checkPort}
               onChange={(e) => setCheckPort(e.target.value)}
               className="rounded-xl"
@@ -229,40 +236,40 @@ export function HetznerProvisionCard({ onProvisioned }: Props) {
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="grid gap-1.5">
-            <Label htmlFor="hz-loc">Location</Label>
+            <Label htmlFor="do-region">Region</Label>
             <select
-              id="hz-loc"
+              id="do-region"
               className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
             >
-              {opts.locations.map((l) => (
-                <option key={l.name} value={l.name}>
-                  {l.name} — {l.description}
+              {opts.regions.map((l) => (
+                <option key={l.slug} value={l.slug}>
+                  {l.slug} — {l.name}
                 </option>
               ))}
             </select>
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="hz-type">Server type</Label>
+            <Label htmlFor="do-size">Size</Label>
             <select
-              id="hz-type"
+              id="do-size"
               className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
-              value={serverType}
-              onChange={(e) => setServerType(e.target.value)}
+              value={size}
+              onChange={(e) => setSize(e.target.value)}
             >
-              {opts.serverTypes.map((s) => (
-                <option key={s.name} value={s.name}>
-                  {s.name} · {s.cores} vCPU · {s.memory} MB — {s.description}
+              {opts.sizes.map((s) => (
+                <option key={s.slug} value={s.slug}>
+                  {s.slug} · {s.vcpus} vCPU · {Math.round(s.memory / 1024)} GB — {s.description}
                 </option>
               ))}
             </select>
           </div>
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="hz-pub">SSH public key</Label>
+          <Label htmlFor="do-pub">SSH public key</Label>
           <Textarea
-            id="hz-pub"
+            id="do-pub"
             value={publicKey}
             onChange={(e) => setPublicKey(e.target.value)}
             rows={2}
@@ -271,9 +278,9 @@ export function HetznerProvisionCard({ onProvisioned }: Props) {
           />
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="hz-priv">SSH private key (same pair — stored for this panel only)</Label>
+          <Label htmlFor="do-priv">SSH private key (same pair — stored for this panel only)</Label>
           <Textarea
-            id="hz-priv"
+            id="do-priv"
             value={privateKey}
             onChange={(e) => setPrivateKey(e.target.value)}
             rows={5}
@@ -284,7 +291,7 @@ export function HetznerProvisionCard({ onProvisioned }: Props) {
         <Button
           type="button"
           className="w-full rounded-xl sm:w-auto"
-          disabled={busy || opts.locations.length === 0 || opts.serverTypes.length === 0}
+          disabled={busy || opts.regions.length === 0 || opts.sizes.length === 0}
           onClick={() => void runProvision()}
         >
           {busy ? (
@@ -293,7 +300,7 @@ export function HetznerProvisionCard({ onProvisioned }: Props) {
               Working…
             </>
           ) : (
-            "Create server & connect panel"
+            "Create droplet & connect panel"
           )}
         </Button>
       </CardContent>

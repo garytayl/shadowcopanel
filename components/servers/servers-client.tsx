@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { ServerProfilePublic } from "@/lib/server-profiles/types";
+import { DigitalOceanProvisionCard } from "@/components/servers/digitalocean-provision-card";
 import { HetznerProvisionCard } from "@/components/servers/hetzner-provision-card";
 
 type ListResponse = {
@@ -214,6 +215,7 @@ export function ServersClient() {
 
   return (
     <div className="space-y-6">
+      <DigitalOceanProvisionCard onProvisioned={() => void load()} />
       <HetznerProvisionCard onProvisioned={() => void load()} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
