@@ -1,16 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Loader2, ServerCog, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { PowerOrb, type PowerOrbPhase } from "@/components/dashboard/power-orb";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -41,9 +36,9 @@ type Props = {
   onProvisioned: () => void;
 };
 
-const MAX_LOG = 40;
+const MAX_LOG = 80;
 
-function ErrorLog({
+function ActivityLog({
   lines,
   onClear,
   className,
@@ -52,11 +47,11 @@ function ErrorLog({
   onClear: () => void;
   className?: string;
 }) {
-  if (lines.length === 0) return null;
+  const empty = lines.length === 0;
   return (
-    <div className={cn("rounded-xl border border-border/80 bg-muted/40", className)}>
-      <div className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-1.5">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <div className={cn("rounded-xl border border-border/80 bg-muted/30", className)}>
+      <div className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
           Log
         </span>
         <Button
@@ -65,24 +60,34 @@ function ErrorLog({
           size="sm"
           className="h-7 text-[11px] text-muted-foreground"
           onClick={onClear}
+          disabled={empty}
         >
           Clear
         </Button>
       </div>
-      <ScrollArea className="h-[min(160px,28vh)] w-full">
-        <pre
-          className="whitespace-pre-wrap break-words px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground"
-          role="log"
-          aria-live="polite"
-        >
-          {lines.join("\n")}
-        </pre>
+      <ScrollArea className="h-[min(280px,42vh)] w-full">
+        {empty ? (
+          <p className="px-3 py-4 text-sm text-muted-foreground">
+            No output yet. Use the power control above to create a server — errors and steps appear here.
+          </p>
+        ) : (
+          <pre
+            className="whitespace-pre-wrap break-words px-3 py-3 font-mono text-[11px] leading-relaxed text-muted-foreground"
+            role="log"
+            aria-live="polite"
+          >
+            {lines.join("\n")}
+          </pre>
+        )}
       </ScrollArea>
     </div>
   );
 }
 
 export function AwsProvisionCard({ onProvisioned }: Props) {
+  const advId = useId();
+  const awsKeysDetailsRef = useRef<HTMLDetailsElement>(null);
+
   const [opts, setOpts] = useState<Options | null>(null);
   const [awsSettings, setAwsSettings] = useState<AwsSettings | null>(null);
   const [loadingOpts, setLoadingOpts] = useState(true);
@@ -200,12 +205,20 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
   }
 
   async function runProvision() {
-    if (!opts?.enabled) return;
+    if (!opts?.enabled) {
+      const el = awsKeysDetailsRef.current;
+      if (el) {
+        el.open = true;
+        el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+      pushLog("Add AWS keys first (expand “AWS keys” below), or set keys on the host.");
+      return;
+    }
     const pk = publicKey.trim();
     const priv = privateKey.trim();
 
     if (!region || !instanceType) {
-      pushLog("Pick a region and size.");
+      pushLog("Pick a region and size in Advanced.");
       return;
     }
 
@@ -236,7 +249,6 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
         error?: string;
         awsInstanceId?: string;
         awsRegion?: string;
-        usedAutoKeys?: boolean;
       };
       if (!create.ok) throw new Error(cj.error ?? "Create failed");
       const instanceId = cj.awsInstanceId;
@@ -307,282 +319,296 @@ export function AwsProvisionCard({ onProvisioned }: Props) {
     }
   }
 
-  if (loadingOpts) {
-    return (
-      <Card className="rounded-2xl border-border/80">
-        <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" aria-hidden />
-          Loading…
-        </CardContent>
-      </Card>
-    );
-  }
+  let orbPhase: PowerOrbPhase;
+  if (loadingOpts) orbPhase = "loading";
+  else if (busy) orbPhase = "provision_busy";
+  else if (opts?.enabled) orbPhase = "provision_ready";
+  else orbPhase = "unknown";
 
-  if (!opts?.enabled) {
-    const credentialsLockedByEnv = awsSettings?.canSaveCredentialsInApp === false;
-    return (
-      <Card className="rounded-2xl border-border/80 border-dashed">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ServerCog className="size-4" aria-hidden />
+  const hero = (
+    <section
+      className={cn(
+        "relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-b from-zinc-900/90 via-card to-zinc-950/95 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_24px_80px_-24px_rgba(0,0,0,0.55)] ring-1 ring-primary/10 md:p-10",
+      )}
+    >
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_45%_at_50%_-10%,rgba(56,189,248,0.09),transparent)]"
+        aria-hidden
+      />
+      <div className="relative flex flex-col items-center gap-6 md:gap-8">
+        <div className="text-center">
+          <p className="flex items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+            <ServerCog className="size-3.5 opacity-80" aria-hidden />
             New cloud server
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            {credentialsLockedByEnv
-              ? "AWS keys are set on the host. Open this section only if you need to change them."
-              : "The host needs AWS API access once (environment variables or paste below)."}
           </p>
-          {awsSettings?.envOverrides ? (
-            <p className="rounded-lg border border-amber-500/35 bg-amber-500/[0.07] px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
-              {awsSettings.envOverrides}
-            </p>
-          ) : null}
+          <p className="mt-2 text-sm text-muted-foreground">
+            Same power control as Home — tap to provision EC2 (SSH keys generated on the server).
+          </p>
+        </div>
 
-          {!credentialsLockedByEnv ? (
-            <details className="rounded-xl border border-border/60 bg-muted/15">
-              <summary className="cursor-pointer select-none px-3 py-2.5 text-sm font-medium text-foreground">
-                AWS keys (operator)
-              </summary>
-              <div className="space-y-3 border-t border-border/60 px-3 pb-3 pt-3">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="aws-ak">Access key ID</Label>
-                    <Input
-                      id="aws-ak"
-                      value={connectAccessKeyId}
-                      onChange={(e) => setConnectAccessKeyId(e.target.value)}
-                      autoComplete="off"
-                      className="rounded-xl font-mono text-xs"
-                    />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="aws-region-conn">Region</Label>
-                    <Input
-                      id="aws-region-conn"
-                      value={connectRegion}
-                      onChange={(e) => setConnectRegion(e.target.value)}
-                      placeholder="us-east-1"
-                      className="rounded-xl font-mono text-xs"
-                    />
-                  </div>
-                </div>
+        {loadingOpts ? (
+          <div className="flex flex-col items-center gap-3 py-8 text-muted-foreground">
+            <Loader2 className="size-10 animate-spin" aria-hidden />
+            <p className="text-sm">Loading regions…</p>
+          </div>
+        ) : (
+          <PowerOrb
+            phase={orbPhase}
+            size="hero"
+            disabled={busy}
+            title={
+              !opts?.enabled
+                ? "Configure AWS first — tap to show keys"
+                : busy
+                  ? "Provisioning…"
+                  : "Create new server on AWS"
+            }
+            actionLabel={
+              !opts?.enabled
+                ? "Needs AWS keys"
+                : busy
+                  ? "Working…"
+                  : "Create server"
+            }
+            onClick={() => void runProvision()}
+          />
+        )}
+
+        {!loadingOpts && !opts?.enabled ? (
+          <p className="max-w-md text-center text-sm text-muted-foreground">
+            Set{" "}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">AWS_*</code> on the host or
+            expand <strong className="text-foreground">AWS keys</strong> below.
+          </p>
+        ) : null}
+
+        {awsSettings?.envOverrides ? (
+          <p className="max-w-lg rounded-lg border border-amber-500/35 bg-amber-500/[0.07] px-3 py-2 text-center text-xs text-amber-900 dark:text-amber-100">
+            {awsSettings.envOverrides}
+          </p>
+        ) : null}
+
+        {/* Operator: AWS API keys */}
+        {!loadingOpts && opts && !opts.enabled ? (
+          <details ref={awsKeysDetailsRef} className="w-full max-w-lg rounded-xl border border-border/60 bg-muted/10">
+            <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium">
+              AWS keys (operator)
+            </summary>
+            <div className="space-y-3 border-t border-border/60 px-4 pb-4 pt-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div className="grid gap-1.5">
-                  <Label htmlFor="aws-sk">Secret access key</Label>
+                  <Label htmlFor="aws-ak">Access key ID</Label>
                   <Input
-                    id="aws-sk"
-                    type="password"
-                    value={connectSecretKey}
-                    onChange={(e) => setConnectSecretKey(e.target.value)}
+                    id="aws-ak"
+                    value={connectAccessKeyId}
+                    onChange={(e) => setConnectAccessKeyId(e.target.value)}
                     autoComplete="off"
                     className="rounded-xl font-mono text-xs"
                   />
                 </div>
-                <details className="text-sm">
-                  <summary className="cursor-pointer text-muted-foreground">More options</summary>
-                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                    <div className="grid gap-1.5">
-                      <Label htmlFor="aws-st">Session token</Label>
-                      <Input
-                        id="aws-st"
-                        value={connectSessionToken}
-                        onChange={(e) => setConnectSessionToken(e.target.value)}
-                        className="rounded-xl font-mono text-xs"
-                      />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label htmlFor="aws-sg">Ingress CIDR</Label>
-                      <Input
-                        id="aws-sg"
-                        value={connectSgCidr}
-                        onChange={(e) => setConnectSgCidr(e.target.value)}
-                        placeholder="0.0.0.0/0"
-                        className="rounded-xl font-mono text-xs"
-                      />
-                    </div>
-                  </div>
-                </details>
-                <Button
-                  type="button"
-                  className="w-full rounded-xl"
-                  disabled={savingCreds}
-                  onClick={() => void saveAwsCredentials()}
-                >
-                  {savingCreds ? (
-                    <>
-                      <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
-                      Saving…
-                    </>
-                  ) : (
-                    "Save"
-                  )}
-                </Button>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="aws-region-conn">Region</Label>
+                  <Input
+                    id="aws-region-conn"
+                    value={connectRegion}
+                    onChange={(e) => setConnectRegion(e.target.value)}
+                    placeholder="us-east-1"
+                    className="rounded-xl font-mono text-xs"
+                  />
+                </div>
               </div>
-            </details>
-          ) : null}
-          {opts?.error ? <p className="text-sm text-destructive">{opts.error}</p> : null}
-          <ErrorLog lines={logs} onClear={clearLogs} />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="rounded-2xl border-border/80">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <ServerCog className="size-4" aria-hidden />
-          New cloud server
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        {awsSettings ? (
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-            <span>
-              {awsSettings.source === "env" ? (
-                <>Keys from environment{awsSettings.maskedAccessKeyId ? ` · ${awsSettings.maskedAccessKeyId}` : ""}</>
-              ) : (
-                <>
-                  Keys saved for this app
-                  {awsSettings.maskedAccessKeyId ? ` · ${awsSettings.maskedAccessKeyId}` : ""}
-                </>
-              )}
-            </span>
-            {awsSettings.source === "file" ? (
+              <div className="grid gap-1.5">
+                <Label htmlFor="aws-sk">Secret access key</Label>
+                <Input
+                  id="aws-sk"
+                  type="password"
+                  value={connectSecretKey}
+                  onChange={(e) => setConnectSecretKey(e.target.value)}
+                  autoComplete="off"
+                  className="rounded-xl font-mono text-xs"
+                />
+              </div>
+              <details className="text-sm">
+                <summary className="cursor-pointer text-muted-foreground">More options</summary>
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="aws-st">Session token</Label>
+                    <Input
+                      id="aws-st"
+                      value={connectSessionToken}
+                      onChange={(e) => setConnectSessionToken(e.target.value)}
+                      className="rounded-xl font-mono text-xs"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="aws-sg">Ingress CIDR</Label>
+                    <Input
+                      id="aws-sg"
+                      value={connectSgCidr}
+                      onChange={(e) => setConnectSgCidr(e.target.value)}
+                      placeholder="0.0.0.0/0"
+                      className="rounded-xl font-mono text-xs"
+                    />
+                  </div>
+                </div>
+              </details>
               <Button
                 type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 gap-1 text-xs text-muted-foreground"
-                onClick={() => void removeAwsCredentialsFile()}
+                className="w-full rounded-xl"
+                disabled={savingCreds}
+                onClick={() => void saveAwsCredentials()}
               >
-                <Trash2 className="size-3.5" aria-hidden />
-                Remove
+                {savingCreds ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+                    Saving…
+                  </>
+                ) : (
+                  "Save"
+                )}
               </Button>
-            ) : null}
-          </div>
-        ) : null}
-        {awsSettings?.envOverrides ? (
-          <p className="text-xs text-amber-700 dark:text-amber-300">{awsSettings.envOverrides}</p>
-        ) : null}
-        {opts.error ? <p className="text-sm text-amber-600 dark:text-amber-400">{opts.error}</p> : null}
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="grid gap-1.5">
-            <Label htmlFor="aws-label">Name</Label>
-            <Input
-              id="aws-label"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="aws-port">Game port</Label>
-            <Input
-              id="aws-port"
-              value={checkPort}
-              onChange={(e) => setCheckPort(e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="grid gap-1.5">
-            <Label htmlFor="aws-region">Region</Label>
-            <select
-              id="aws-region"
-              className="h-9 w-full rounded-xl border border-input bg-transparent px-2.5 text-sm"
-              value={region}
-              onChange={(e) => setRegion(e.target.value)}
-            >
-              {opts.regions.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.id}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="aws-type">Size</Label>
-            <select
-              id="aws-type"
-              className="h-9 w-full rounded-xl border border-input bg-transparent px-2.5 text-sm"
-              value={instanceType}
-              onChange={(e) => setInstanceType(e.target.value)}
-            >
-              {opts.instanceTypes.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5">
-          <div className="min-w-0">
-            <p className="text-sm font-medium">Use my own SSH key pair</p>
-            <p className="text-xs text-muted-foreground">
-              {useManualKeys
-                ? "Paste the keys EC2 should use."
-                : "Leave off — keys are generated on the server for this launch."}
-            </p>
-          </div>
-          <Switch
-            checked={useManualKeys}
-            onCheckedChange={(v) => setUseManualKeys(Boolean(v))}
-            aria-label="Use my own SSH key pair"
-          />
-        </div>
-
-        {useManualKeys ? (
-          <>
-            <div className="grid gap-1.5">
-              <Label htmlFor="aws-pub">SSH public key</Label>
-              <Textarea
-                id="aws-pub"
-                value={publicKey}
-                onChange={(e) => setPublicKey(e.target.value)}
-                rows={2}
-                placeholder="ssh-ed25519 AAAA…"
-                className="rounded-xl font-mono text-xs"
-              />
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="aws-priv">SSH private key</Label>
-              <Textarea
-                id="aws-priv"
-                value={privateKey}
-                onChange={(e) => setPrivateKey(e.target.value)}
-                rows={4}
-                placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-                className="rounded-xl font-mono text-xs"
-              />
-            </div>
-          </>
+          </details>
         ) : null}
 
-        <Button
-          type="button"
-          className="w-full rounded-xl"
-          size="lg"
-          disabled={busy || opts.regions.length === 0 || opts.instanceTypes.length === 0}
-          onClick={() => void runProvision()}
-        >
-          {busy ? (
-            <>
-              <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
-              Working…
-            </>
-          ) : (
-            "Launch server"
-          )}
-        </Button>
+        {!loadingOpts && opts?.enabled ? (
+          <details className="w-full max-w-2xl rounded-xl border border-border/60 bg-muted/10">
+            <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium">
+              Advanced options
+            </summary>
+            <div className="space-y-4 border-t border-border/60 px-4 pb-4 pt-4">
+              {awsSettings ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>
+                    {awsSettings.source === "env" ? (
+                      <>Keys from environment{awsSettings.maskedAccessKeyId ? ` · ${awsSettings.maskedAccessKeyId}` : ""}</>
+                    ) : (
+                      <>
+                        Keys saved for this app
+                        {awsSettings.maskedAccessKeyId ? ` · ${awsSettings.maskedAccessKeyId}` : ""}
+                      </>
+                    )}
+                  </span>
+                  {awsSettings.source === "file" ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 gap-1 text-xs text-muted-foreground"
+                      onClick={() => void removeAwsCredentialsFile()}
+                    >
+                      <Trash2 className="size-3.5" aria-hidden />
+                      Remove
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
 
-        <ErrorLog lines={logs} onClear={clearLogs} />
-      </CardContent>
-    </Card>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="aws-label">Name</Label>
+                  <Input
+                    id="aws-label"
+                    value={label}
+                    onChange={(e) => setLabel(e.target.value)}
+                    className="rounded-xl"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="aws-port">Game port</Label>
+                  <Input
+                    id="aws-port"
+                    value={checkPort}
+                    onChange={(e) => setCheckPort(e.target.value)}
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="aws-region">Region</Label>
+                  <select
+                    id="aws-region"
+                    className="h-9 w-full rounded-xl border border-input bg-transparent px-2.5 text-sm"
+                    value={region}
+                    onChange={(e) => setRegion(e.target.value)}
+                  >
+                    {opts.regions.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="aws-type">Size</Label>
+                  <select
+                    id="aws-type"
+                    className="h-9 w-full rounded-xl border border-input bg-transparent px-2.5 text-sm"
+                    value={instanceType}
+                    onChange={(e) => setInstanceType(e.target.value)}
+                  >
+                    {opts.instanceTypes.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">Use my own SSH key pair</p>
+                  <p className="text-xs text-muted-foreground">
+                    {useManualKeys ? "Paste keys here." : "Off = generated on the server."}
+                  </p>
+                </div>
+                <Switch
+                  checked={useManualKeys}
+                  onCheckedChange={(v) => setUseManualKeys(Boolean(v))}
+                  aria-label="Use my own SSH key pair"
+                />
+              </div>
+
+              {useManualKeys ? (
+                <>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor={`${advId}-pub`}>SSH public key</Label>
+                    <Textarea
+                      id={`${advId}-pub`}
+                      value={publicKey}
+                      onChange={(e) => setPublicKey(e.target.value)}
+                      rows={2}
+                      placeholder="ssh-ed25519 AAAA…"
+                      className="rounded-xl font-mono text-xs"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor={`${advId}-priv`}>SSH private key</Label>
+                    <Textarea
+                      id={`${advId}-priv`}
+                      value={privateKey}
+                      onChange={(e) => setPrivateKey(e.target.value)}
+                      rows={4}
+                      placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                      className="rounded-xl font-mono text-xs"
+                    />
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </details>
+        ) : null}
+
+        {opts?.error ? (
+          <p className="text-center text-sm text-amber-600 dark:text-amber-400">{opts.error}</p>
+        ) : null}
+
+        <ActivityLog lines={logs} onClear={clearLogs} className="w-full max-w-2xl" />
+      </div>
+    </section>
   );
+
+  return <div className="space-y-0">{hero}</div>;
 }
