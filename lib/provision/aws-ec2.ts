@@ -143,7 +143,7 @@ export async function launchUbuntuWithSsh(
   const sgOut = await client.send(
     new CreateSecurityGroupCommand({
       GroupName: input.securityGroupName,
-      Description: "Reforger panel — SSH + game UDP (edit in AWS if needed)",
+      Description: "Reforger panel - SSH + game UDP (edit in AWS if needed)",
       VpcId: vpcId,
     }),
   );
