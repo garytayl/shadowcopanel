@@ -8,7 +8,7 @@ import { err, ok, type ApiResult } from "@/lib/types/api";
 import type { FixServerResult } from "@/lib/types/fix-server";
 
 export async function actionFixServer(): Promise<ApiResult<FixServerResult>> {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const result = await runFixServerPipeline();

@@ -98,6 +98,11 @@ export type PublicServerSettings = {
   announcement: string | null;
   /** Game / query port highlighted on Home (from REFORGER_CHECK_PORT) */
   checkPort: number;
+  /** Active saved profile (Servers page), if any */
+  activeProfileId: string | null;
+  activeProfileName: string | null;
+  /** Whether the active connection comes from env vars or a saved profile */
+  connectionSource: "env" | "profile" | "none";
 };
 
 export function getPublicServerSettings(): PublicServerSettings {
@@ -119,6 +124,9 @@ export function getPublicServerSettings(): PublicServerSettings {
       logGlob: null,
       announcement,
       checkPort: num(env("REFORGER_CHECK_PORT"), 2001),
+      activeProfileId: null,
+      activeProfileName: null,
+      connectionSource: "none",
     };
   }
   return {
@@ -138,5 +146,8 @@ export function getPublicServerSettings(): PublicServerSettings {
     logGlob: e.REFORGER_LOG_GLOB ?? null,
     announcement,
     checkPort: num(env("REFORGER_CHECK_PORT"), 2001),
+    activeProfileId: null,
+    activeProfileName: null,
+    connectionSource: "env",
   };
 }

@@ -6,7 +6,7 @@ import {
   maybeRecordHealthWarning,
   safeRecordActivity,
 } from "@/lib/activity/log";
-import { getPublicServerSettings } from "@/lib/env/server";
+import { getPublicServerSettingsResolved } from "@/lib/server-profiles/public-settings";
 import { getGamePortChecks } from "@/lib/ssh/port-check";
 import {
   computeHealthScore,
@@ -49,7 +49,7 @@ export type ServerActivitySnapshot = {
 };
 
 export type DashboardSnapshot = {
-  settings: ReturnType<typeof getPublicServerSettings>;
+  settings: Awaited<ReturnType<typeof getPublicServerSettingsResolved>>;
   status: Awaited<ReturnType<typeof getServerRuntimeStatus>>;
   ports: { stdout: string };
   /** Parsed UDP/TCP socket hints for game ports (not UDP gameplay RTT). */
@@ -73,10 +73,10 @@ export type DashboardSnapshot = {
 export async function fetchDashboardSnapshot(): Promise<
   ApiResult<DashboardSnapshot>
 > {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
-    const settings = getPublicServerSettings();
+    const settings = await getPublicServerSettingsResolved();
     const [status, ports, portResult, health, system, cpuCores, configRaw] = await Promise.all([
       getServerRuntimeStatus(),
       getListeningPorts(),
@@ -212,7 +212,7 @@ export async function fetchDashboardSnapshot(): Promise<
 export async function actionStartServer(): Promise<
   ApiResult<{ message: string }>
 > {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const out = await startServer();
@@ -231,7 +231,7 @@ export async function actionStartServer(): Promise<
 export async function actionStopServer(): Promise<
   ApiResult<{ message: string }>
 > {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const out = await stopServer();
@@ -250,7 +250,7 @@ export async function actionStopServer(): Promise<
 export async function actionRestartServer(): Promise<
   ApiResult<{ message: string }>
 > {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const out = await restartServer();
@@ -269,7 +269,7 @@ export async function actionRestartServer(): Promise<
 export async function actionCheckHealth(): Promise<
   ApiResult<{ free: string; pgrep: string }>
 > {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     return ok(await getHealthSnapshot());
@@ -281,7 +281,7 @@ export async function actionCheckHealth(): Promise<
 export async function actionCheckPorts(): Promise<
   ApiResult<{ stdout: string }>
 > {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const p = await getListeningPorts();
@@ -292,7 +292,7 @@ export async function actionCheckPorts(): Promise<
 }
 
 export async function actionFetchLogs(): Promise<ApiResult<{ text: string }>> {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const text = await getRecentLogs(500);
@@ -303,10 +303,10 @@ export async function actionFetchLogs(): Promise<ApiResult<{ text: string }>> {
 }
 
 export async function fetchPublicSettingsOnly(): Promise<
-  ApiResult<{ settings: ReturnType<typeof getPublicServerSettings> }>
+  ApiResult<{ settings: Awaited<ReturnType<typeof getPublicServerSettingsResolved>> }>
 > {
   try {
-    return ok({ settings: getPublicServerSettings() });
+    return ok({ settings: await getPublicServerSettingsResolved() });
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));
   }

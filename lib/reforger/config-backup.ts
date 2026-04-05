@@ -1,6 +1,6 @@
 import "server-only";
 
-import { requireServerEnv } from "@/lib/env/server";
+import { requireResolvedServerEnv } from "@/lib/server-profiles/resolve";
 import { sshExec } from "@/lib/ssh/client";
 
 function shSingleQuote(s: string): string {
@@ -17,7 +17,7 @@ export type ConfigBackupResult =
  * If the file does not exist yet, returns `skipped` (first deploy) instead of failing.
  */
 export async function backupRemoteConfigBeforeWrite(): Promise<ConfigBackupResult> {
-  const env = requireServerEnv();
+  const env = await requireResolvedServerEnv();
   const path = env.REFORGER_CONFIG_PATH;
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
   const backupPath = `${path}.bak.${ts}`;

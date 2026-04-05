@@ -24,7 +24,7 @@ export async function fetchDiagnosticsAction(): Promise<
     logAnalysis: LogAnalysisResult | null;
   }>
 > {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const [system, ports, health, control] = await Promise.all([

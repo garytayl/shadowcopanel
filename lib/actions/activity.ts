@@ -6,7 +6,7 @@ import type { ActivityEvent } from "@/lib/activity/types";
 import { err, ok, type ApiResult } from "@/lib/types/api";
 
 export async function listActivityEventsAction(limit = 200): Promise<ApiResult<ActivityEvent[]>> {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     return ok(await listActivityEvents(limit));
@@ -16,7 +16,7 @@ export async function listActivityEventsAction(limit = 200): Promise<ApiResult<A
 }
 
 export async function clearActivityEventsAction(): Promise<ApiResult<{ cleared: true }>> {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     await clearActivityEvents();
@@ -28,7 +28,7 @@ export async function clearActivityEventsAction(): Promise<ApiResult<{ cleared: 
 
 /** Client-triggered marketplace add — validated server-side. */
 export async function recordMarketplaceImportAction(modId: string, name: string): Promise<ApiResult<void>> {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   const id = modId.trim();
   if (!id || id.length > 64) return err("Invalid mod id");
@@ -46,7 +46,7 @@ export async function recordMarketplaceBulkAddAction(
   count: number,
   summary: string,
 ): Promise<ApiResult<void>> {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   const n = Math.round(Number(count));
   if (!Number.isFinite(n) || n < 1 || n > 200) return err("Invalid count");

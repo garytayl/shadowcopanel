@@ -41,7 +41,7 @@ async function fetchCatalogForIds(ids: string[]): Promise<Map<string, WorkshopCa
 export async function actionValidateModStackFull(
   rows: ModRowPayload[],
 ): Promise<ApiResult<ModStackValidationResult>> {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const raw = await getRemoteConfigText();

@@ -1,6 +1,5 @@
 import "server-only";
 
-import { requireServerEnv } from "@/lib/env/server";
 import { sshExec } from "@/lib/ssh/client";
 
 /** Safe for embedding in `bash -lc '...'`. */

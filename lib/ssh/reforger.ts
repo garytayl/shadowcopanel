@@ -1,6 +1,6 @@
 import "server-only";
 
-import { requireServerEnv } from "@/lib/env/server";
+import { getResolvedCheckPort, requireResolvedServerEnv } from "@/lib/server-profiles/resolve";
 import { measureControlLinkRoundTrip, sshExec, sshReadFile, sshWriteFile } from "@/lib/ssh/client";
 import { shSingleQuote } from "@/lib/ssh/orchestration";
 import { backupRemoteConfigBeforeWrite } from "@/lib/reforger/config-backup";
@@ -49,7 +49,7 @@ export async function getServerRuntimeStatus(opts?: {
     };
   }
 
-  const env = requireServerEnv();
+  const env = await requireResolvedServerEnv();
   const session = env.REFORGER_TMUX_SESSION;
   let tmuxSessionExists = false;
   let processRunning = false;
@@ -80,7 +80,7 @@ export async function getServerRuntimeStatus(opts?: {
 }
 
 export async function startServer(): Promise<{ message: string }> {
-  const env = requireServerEnv();
+  const env = await requireResolvedServerEnv();
   const session = env.REFORGER_TMUX_SESSION;
   const inner = `cd ${shSingleQuote(env.REFORGER_SERVER_PATH)} && ${env.REFORGER_SERVER_CMD}`;
   const has = await sshExec(`tmux has-session -t ${shSingleQuote(session)}`);
@@ -100,7 +100,7 @@ export async function startServer(): Promise<{ message: string }> {
 }
 
 export async function stopServer(): Promise<{ message: string }> {
-  const env = requireServerEnv();
+  const env = await requireResolvedServerEnv();
   const session = env.REFORGER_TMUX_SESSION;
   const script = [
     `tmux send-keys -t ${shSingleQuote(session)} C-c`,
@@ -124,7 +124,7 @@ export async function restartServer(): Promise<{ message: string }> {
 }
 
 export async function getListeningPorts(): Promise<{ stdout: string; stderr: string }> {
-  const port = process.env.REFORGER_CHECK_PORT?.trim() || "2001";
+  const port = String(await getResolvedCheckPort());
   /** `-tuanp`: all states — UDP bound sockets are often UNCONN, not LISTEN (avoid `-l`-only views). */
   const r = await sshExec(
     `ss -tuanp 2>/dev/null | grep -E ${shSingleQuote(`:${port}([^0-9]|$)`)} || true`,
@@ -153,7 +153,7 @@ export async function getHealthSnapshot(): Promise<{
 }
 
 export async function getRemoteConfigText(): Promise<string> {
-  const env = requireServerEnv();
+  const env = await requireResolvedServerEnv();
   const path = env.REFORGER_CONFIG_PATH;
   try {
     return await sshReadFile(path);
@@ -195,7 +195,7 @@ export async function saveRemoteConfig(config: ReforgerConfig): Promise<RemoteCo
     );
   }
 
-  const env = requireServerEnv();
+  const env = await requireResolvedServerEnv();
   const path = env.REFORGER_CONFIG_PATH;
   const body = stringifyConfig(norm.config);
   await sshWriteFile(path, body);
@@ -265,7 +265,7 @@ export async function getPingExternal(): Promise<string> {
 }
 
 export async function getRecentLogs(lines = 400): Promise<string> {
-  const env = requireServerEnv();
+  const env = await requireResolvedServerEnv();
   const glob = env.REFORGER_LOG_GLOB;
   const serverPath = env.REFORGER_SERVER_PATH;
 

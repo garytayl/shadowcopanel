@@ -5,7 +5,11 @@ import {
   hostsEffectivelyMatch,
   type JoinabilityBuildInput,
 } from "@/lib/connectivity/joinability-model";
-import { requireServerEnv } from "@/lib/env/server";
+import {
+  getResolvedCheckPort,
+  requireResolvedServerEnv,
+  tryGetResolvedServerEnv,
+} from "@/lib/server-profiles/resolve";
 import { measureControlLinkRoundTrip } from "@/lib/ssh/client";
 import { defaultGamePortsToCheck, getGamePortChecks } from "@/lib/ssh/port-check";
 import {
@@ -63,12 +67,12 @@ export async function runJoinabilityDiagnostics(): Promise<JoinabilityResult> {
       })),
       publicAddressMatch: null,
       configPublicAddress: null,
-      panelHost: requireServerEnv().REFORGER_SSH_HOST,
+      panelHost: (await tryGetResolvedServerEnv())?.REFORGER_SSH_HOST ?? "",
     });
   }
 
-  const env = requireServerEnv();
-  const sessionPort = Number(process.env.REFORGER_CHECK_PORT?.trim() || "2001") || 2001;
+  const env = await requireResolvedServerEnv();
+  const sessionPort = (await getResolvedCheckPort()) || 2001;
 
   const [status, portResult, cfg] = await Promise.all([
     getServerRuntimeStatus({ control }),

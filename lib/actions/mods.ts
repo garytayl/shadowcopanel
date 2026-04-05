@@ -35,7 +35,7 @@ export async function loadModsAction(): Promise<
     modStackValidation: ModStackValidationResult;
   }>
 > {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const rawConfig = await getRemoteConfigText();
@@ -74,7 +74,7 @@ export async function saveModsAction(
   mods: ModRowPayload[],
   options?: { allowStackValidationErrors?: boolean },
 ): Promise<ApiResult<RemoteConfigSaveResult>> {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const raw = await getRemoteConfigText();

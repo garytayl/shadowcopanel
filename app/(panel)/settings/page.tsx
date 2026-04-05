@@ -1,7 +1,7 @@
 import { Hint } from "@/components/dashboard/hint";
 import { PageHeader } from "@/components/panel/page-header";
 import { InPlainEnglish } from "@/components/help/in-plain-english";
-import { getPublicServerSettings } from "@/lib/env/server";
+import { getPublicServerSettingsResolved } from "@/lib/server-profiles/public-settings";
 import {
   Card,
   CardContent,
@@ -19,14 +19,14 @@ function maskPath(p: string | null): string {
   return `${p.slice(0, 10)}…${p.slice(-8)}`;
 }
 
-export default function SettingsPage() {
-  const s = getPublicServerSettings();
+export default async function SettingsPage() {
+  const s = await getPublicServerSettingsResolved();
 
   return (
     <>
       <PageHeader
         title="Connection details"
-        description="A read-only checklist of how this website reaches your game server. Your host or a friend may have set this up already."
+        description="A read-only checklist of how this website reaches your game server. Add or switch saved connections on the Servers page."
       >
         <InPlainEnglish title="Why this looks technical">
           <p>
@@ -37,6 +37,17 @@ export default function SettingsPage() {
           </p>
         </InPlainEnglish>
       </PageHeader>
+
+      {s.connectionSource === "profile" && s.activeProfileName ? (
+        <Alert className="mb-6 rounded-2xl border-primary/30 bg-primary/[0.06]">
+          <AlertTitle className="text-foreground">Using a saved server profile</AlertTitle>
+          <AlertDescription className="text-sm leading-relaxed text-muted-foreground">
+            Active connection: <strong className="text-foreground">{s.activeProfileName}</strong>. Manage
+            profiles on the <a className="text-primary underline underline-offset-2" href="/servers">Servers</a>{" "}
+            page.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <Alert className="mb-6 rounded-2xl border-amber-500/35 bg-amber-500/[0.07]">
         <AlertTitle className="text-foreground">Keep this panel private</AlertTitle>

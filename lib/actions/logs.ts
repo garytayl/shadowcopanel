@@ -28,7 +28,7 @@ function buildHealthSummary(text: string, analysis: LogAnalysisResult): LogHealt
 export async function fetchLogsAction(
   lines = 500,
 ): Promise<ApiResult<{ text: string; health: LogHealthSummary; analysis: LogAnalysisResult }>> {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const text = await getRecentLogs(lines);

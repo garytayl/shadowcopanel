@@ -30,7 +30,7 @@ export type ConfigLoadResult = {
 };
 
 export async function loadRemoteConfigAction(): Promise<ApiResult<ConfigLoadResult>> {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const raw = await getRemoteConfigText();
@@ -47,7 +47,7 @@ export async function loadRemoteConfigAction(): Promise<ApiResult<ConfigLoadResu
 export async function saveRemoteConfigAction(
   form: ReforgerFormValues,
 ): Promise<ApiResult<RemoteConfigSaveResult>> {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const raw = await getRemoteConfigText();
@@ -79,7 +79,7 @@ export async function saveRemoteConfigAction(
 export async function saveRawConfigAction(
   rawJson: string,
 ): Promise<ApiResult<RemoteConfigSaveResult>> {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const rawExisting = await getRemoteConfigText();
@@ -131,7 +131,7 @@ export async function validateJsonAction(
 export async function exportRemoteConfigAction(): Promise<
   ApiResult<{ content: string; filename: string }>
 > {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const raw = await getRemoteConfigText();
@@ -149,7 +149,7 @@ export async function exportRemoteConfigAction(): Promise<
 export async function repairRemoteConfigAction(): Promise<
   ApiResult<RemoteConfigSaveResult & { summaryLines: string[] }>
 > {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const raw = await getRemoteConfigText();

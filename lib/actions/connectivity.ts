@@ -2,7 +2,7 @@
 
 import { ensureConfigured } from "@/lib/actions/guard";
 import { safeRecordActivity } from "@/lib/activity/log";
-import { requireServerEnv } from "@/lib/env/server";
+import { requireResolvedServerEnv } from "@/lib/server-profiles/resolve";
 import { runJoinabilityDiagnostics } from "@/lib/ssh/joinability";
 import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
 import { getRemoteConfigText, saveRemoteConfig, type RemoteConfigSaveResult } from "@/lib/ssh/reforger";
@@ -13,7 +13,7 @@ import type { JoinabilityResult } from "@/lib/types/connectivity";
 export async function actionRunJoinabilityCheck(): Promise<
   ApiResult<JoinabilityResult>
 > {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     const result = await runJoinabilityDiagnostics();
@@ -37,10 +37,10 @@ export async function actionRunJoinabilityCheck(): Promise<
 export async function actionSyncPublicAddressToPanelHost(): Promise<
   ApiResult<RemoteConfigSaveResult>
 > {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
-    const env = requireServerEnv();
+    const env = await requireResolvedServerEnv();
     const host = env.REFORGER_SSH_HOST.trim();
     if (!host) return err("Panel host is not set");
 

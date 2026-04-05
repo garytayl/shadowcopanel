@@ -1,17 +1,17 @@
 import "server-only";
 
-import { tryGetServerEnv } from "@/lib/env/server";
+import { tryGetResolvedServerEnv } from "@/lib/server-profiles/resolve";
 import { err, type ApiErr } from "@/lib/types/api";
 
 export function notConfiguredError(): ApiErr {
   return err(
-    "SSH is not configured. Add .env.local from .env.example and restart the dev server.",
+    "SSH is not configured. Add a server on the Servers page, or add .env.local from .env.example and restart the dev server.",
     "NOT_CONFIGURED",
   );
 }
 
-export function ensureConfigured(): true | ApiErr {
-  if (!tryGetServerEnv()) {
+export async function ensureConfigured(): Promise<true | ApiErr> {
+  if (!(await tryGetResolvedServerEnv())) {
     return notConfiguredError();
   }
   return true;

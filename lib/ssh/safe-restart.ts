@@ -1,6 +1,7 @@
 import "server-only";
 
-import { getPublicServerSettings, requireServerEnv } from "@/lib/env/server";
+import { requireResolvedServerEnv } from "@/lib/server-profiles/resolve";
+import { getPublicServerSettingsResolved } from "@/lib/server-profiles/public-settings";
 import { applyFixServerDefaults } from "@/lib/reforger/fix-server-defaults";
 import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
 import { validateReforgerConfigForFixServer } from "@/lib/reforger/config-validate";
@@ -42,9 +43,9 @@ export type SafeRestartOptions = {
 
 export async function runSafeRestartPipeline(opts?: SafeRestartOptions): Promise<SafeRestartResult> {
   const steps: SafeRestartStep[] = [];
-  const settings = getPublicServerSettings();
+  const settings = await getPublicServerSettingsResolved();
   const checkPort = settings.checkPort;
-  const env = requireServerEnv();
+  const env = await requireResolvedServerEnv();
   const panelHost = env.REFORGER_SSH_HOST ?? "";
   const session = env.REFORGER_TMUX_SESSION;
   const reason = opts?.reason ?? "manual";

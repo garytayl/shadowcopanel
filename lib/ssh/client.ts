@@ -3,7 +3,8 @@ import "server-only";
 import { readFileSync } from "node:fs";
 import { Client } from "ssh2";
 
-import { requireServerEnv } from "@/lib/env/server";
+import type { ServerEnv } from "@/lib/env/server";
+import { requireResolvedServerEnv } from "@/lib/server-profiles/resolve";
 import { describeSshFailure } from "@/lib/ssh/errors";
 
 export type ExecResult = {
@@ -13,20 +14,18 @@ export type ExecResult = {
   stderr: string;
 };
 
-function loadPrivateKey(): Buffer | string {
-  const env = requireServerEnv();
-  if (env.REFORGER_SSH_PRIVATE_KEY_PATH) {
-    return readFileSync(env.REFORGER_SSH_PRIVATE_KEY_PATH);
+function loadPrivateKey(serverEnv: ServerEnv): Buffer | string {
+  if (serverEnv.REFORGER_SSH_PRIVATE_KEY_PATH) {
+    return readFileSync(serverEnv.REFORGER_SSH_PRIVATE_KEY_PATH);
   }
-  if (env.REFORGER_SSH_PRIVATE_KEY) {
-    return env.REFORGER_SSH_PRIVATE_KEY;
+  if (serverEnv.REFORGER_SSH_PRIVATE_KEY) {
+    return serverEnv.REFORGER_SSH_PRIVATE_KEY;
   }
   throw new Error("No SSH private key configured");
 }
 
-function connectClient(): Promise<Client> {
-  const env = requireServerEnv();
-  const privateKey = loadPrivateKey();
+function connectClient(serverEnv: ServerEnv): Promise<Client> {
+  const privateKey = loadPrivateKey(serverEnv);
 
   return new Promise((resolve, reject) => {
     const client = new Client();
@@ -53,9 +52,9 @@ function connectClient(): Promise<Client> {
         reject(new Error(describeSshFailure(e.message)));
       })
       .connect({
-        host: env.REFORGER_SSH_HOST,
-        port: env.REFORGER_SSH_PORT,
-        username: env.REFORGER_SSH_USER,
+        host: serverEnv.REFORGER_SSH_HOST,
+        port: serverEnv.REFORGER_SSH_PORT,
+        username: serverEnv.REFORGER_SSH_USER,
         privateKey,
         // Default ssh2 is 20s; Vercel → EC2 can be slow if SG/NACL delays packets.
         readyTimeout: 45_000,
@@ -76,8 +75,9 @@ function connectClient(): Promise<Client> {
  * So we never embed arbitrary scripts in the outer `-c` argument: decode with base64 and
  * pipe into `bash -l` (login env, same intent as `-lc`).
  */
-export async function sshExec(command: string): Promise<ExecResult> {
-  const client = await connectClient();
+export async function sshExec(command: string, serverEnv?: ServerEnv): Promise<ExecResult> {
+  const resolved = serverEnv ?? (await requireResolvedServerEnv());
+  const client = await connectClient(resolved);
   const normalized = command.replace(/\r\n/g, "\n");
   const b64 = Buffer.from(normalized, "utf8").toString("base64");
   // Base64 alphabet has no single quotes — safe inside '…' for the outer bash -lc.
@@ -114,7 +114,8 @@ export async function sshExec(command: string): Promise<ExecResult> {
  * Write UTF-8 text to a remote path via SFTP (avoids shell length limits for large JSON).
  */
 export async function sshWriteFile(remotePath: string, body: string): Promise<void> {
-  const client = await connectClient();
+  const serverEnv = await requireResolvedServerEnv();
+  const client = await connectClient(serverEnv);
   const buf = Buffer.from(body, "utf8");
 
   try {
@@ -139,7 +140,8 @@ export async function sshWriteFile(remotePath: string, body: string): Promise<vo
  * Read a remote file via SFTP (binary-safe).
  */
 export async function sshReadFile(remotePath: string): Promise<string> {
-  const client = await connectClient();
+  const serverEnv = await requireResolvedServerEnv();
+  const client = await connectClient(serverEnv);
 
   try {
     return await new Promise<string>((resolve, reject) => {

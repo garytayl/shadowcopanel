@@ -14,7 +14,7 @@ export type ToolKind = "disk" | "processes" | "sockets" | "ping";
 export async function runServerToolAction(
   kind: ToolKind,
 ): Promise<ApiResult<{ text: string }>> {
-  const g = ensureConfigured();
+  const g = await ensureConfigured();
   if (g !== true) return g;
   try {
     let text: string;

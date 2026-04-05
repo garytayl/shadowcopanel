@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { tryGetServerEnv } from "@/lib/env/server";
+import { tryGetResolvedServerEnv } from "@/lib/server-profiles/resolve";
 import { measureControlLinkRoundTrip } from "@/lib/ssh/client";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export const runtime = "nodejs";
  * GET /api/health
  */
 export async function GET() {
-  const configured = tryGetServerEnv() !== null;
+  const configured = (await tryGetResolvedServerEnv()) !== null;
   if (!configured) {
     return NextResponse.json(
       {

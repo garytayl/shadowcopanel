@@ -1,6 +1,7 @@
 import "server-only";
 
-import { getPublicServerSettings, requireServerEnv } from "@/lib/env/server";
+import { requireResolvedServerEnv } from "@/lib/server-profiles/resolve";
+import { getPublicServerSettingsResolved } from "@/lib/server-profiles/public-settings";
 import { applyFixServerDefaults } from "@/lib/reforger/fix-server-defaults";
 import { normalizeReforgerConfig } from "@/lib/reforger/config-normalize";
 import { validateReforgerConfigForFixServer } from "@/lib/reforger/config-validate";
@@ -58,9 +59,9 @@ function buildResult(
 export async function runFixServerPipeline(): Promise<FixServerResult> {
   const steps: FixServerStep[] = [];
   const diag = emptyDiagnostics();
-  const settings = getPublicServerSettings();
+  const settings = await getPublicServerSettingsResolved();
   const checkPort = settings.checkPort;
-  const env = requireServerEnv();
+  const env = await requireResolvedServerEnv();
   const session = env.REFORGER_TMUX_SESSION;
 
   const push = (step: string, status: FixServerStep["status"], message?: string) => {
