@@ -3,7 +3,7 @@
  * Arma Reforger binaries still need to be installed (SteamCMD or manual upload).
  */
 export type CloudInitAccount = {
-  /** Linux user (e.g. ubuntu on Hetzner; root is typical for DigitalOcean Ubuntu images). */
+  /** Linux user (e.g. ubuntu on EC2 Ubuntu AMIs). */
   user: string;
   /** Home directory (e.g. /home/ubuntu or /root). */
   home: string;

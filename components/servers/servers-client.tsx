@@ -25,8 +25,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { ServerProfilePublic } from "@/lib/server-profiles/types";
 import { AwsProvisionCard } from "@/components/servers/aws-provision-card";
-import { DigitalOceanProvisionCard } from "@/components/servers/digitalocean-provision-card";
-import { HetznerProvisionCard } from "@/components/servers/hetzner-provision-card";
 
 type ListResponse = {
   profiles: ServerProfilePublic[];
@@ -217,8 +215,6 @@ export function ServersClient() {
   return (
     <div className="space-y-6">
       <AwsProvisionCard onProvisioned={() => void load()} />
-      <DigitalOceanProvisionCard onProvisioned={() => void load()} />
-      <HetznerProvisionCard onProvisioned={() => void load()} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
